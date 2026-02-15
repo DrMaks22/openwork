@@ -169,7 +169,7 @@ async function runStart(pathOverride?: string, options?: { opencodeUrl?: string 
   }
   const bridge = await startBridge(config, logger, reporter);
   if (process.stdout.isTTY) {
-    reporter.onStatus?.("Commands: owpenwork identities, owpenwork bindings, owpenwork status");
+    reporter.onStatus?.("Commands: opencode-router identities, opencode-router bindings, opencode-router status");
   }
 
   const shutdown = async () => {
@@ -185,28 +185,28 @@ async function runStart(pathOverride?: string, options?: { opencodeUrl?: string 
 const program = new Command();
 
 program
-  .name("owpenbot")
+  .name("opencode-router")
   .version(VERSION)
-  .description("Slack + Telegram bridge for a running OpenCode server")
+  .description("Slack + Telegram bridge for a running opencode server")
   .option("--json", "Output in JSON format", false);
 
 program
   .command("start")
   .description("Start the bridge")
-  .argument("[path]", "OpenCode workspace path")
-  .option("--opencode-url <url>", "OpenCode server URL")
+  .argument("[path]", "opencode workspace path")
+  .option("--opencode-url <url>", "opencode server URL")
   .action((pathArg?: string, options?: { opencodeUrl?: string }) => runStart(pathArg, options));
 
 program
   .command("serve")
   .description("Start the bridge (headless)")
-  .argument("[path]", "OpenCode workspace path")
-  .option("--opencode-url <url>", "OpenCode server URL")
+  .argument("[path]", "opencode workspace path")
+  .option("--opencode-url <url>", "opencode server URL")
   .action((pathArg?: string, options?: { opencodeUrl?: string }) => runStart(pathArg, options));
 
 program
   .command("health")
-  .description("Check OpenCode health (exit 0 if healthy, 1 if not)")
+  .description("Check opencode health (exit 0 if healthy, 1 if not)")
   .action(async () => {
     const useJson = program.opts().json;
     const config = loadConfig(process.env, { requireOpencode: false });
@@ -225,7 +225,7 @@ program
         });
       } else {
         console.log(`Healthy: ${healthy ? "yes" : "no"}`);
-        console.log(`OpenCode URL: ${config.opencodeUrl}`);
+        console.log(`opencode URL: ${config.opencodeUrl}`);
       }
       process.exit(healthy ? 0 : 1);
     } catch (error) {
@@ -245,7 +245,7 @@ program
 
 program
   .command("status")
-  .description("Show identity and OpenCode status")
+  .description("Show identity and opencode status")
   .action(() => {
     const useJson = program.opts().json;
     const config = loadConfig(process.env, { requireOpencode: false });
@@ -265,7 +265,7 @@ program
     console.log(`Health port: ${config.healthPort ?? "(not set)"}`);
     console.log(`Telegram bots: ${telegram.length}`);
     console.log(`Slack apps: ${slack.length}`);
-    console.log(`OpenCode URL: ${config.opencodeUrl}`);
+    console.log(`opencode URL: ${config.opencodeUrl}`);
   });
 
 // -----------------------------------------------------------------------------

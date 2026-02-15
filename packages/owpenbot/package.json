@@ -1,11 +1,11 @@
 {
-  "name": "owpenwork",
+  "name": "opencode-router",
   "version": "0.11.45",
-  "description": "Slack + Telegram bridge for a running OpenCode server",
+  "description": "Slack + Telegram bridge for a running opencode server",
   "private": false,
   "type": "module",
   "bin": {
-    "owpenwork": "dist/cli.js",
+    "opencode-router": "dist/cli.js",
     "owpenbot": "dist/cli.js"
   },
   "license": "MIT",
@@ -16,6 +16,7 @@
   },
   "keywords": [
     "opencode",
+    "router",
     "slack",
     "telegram",
     "bridge",

@@ -9,7 +9,7 @@ OWPENBOT_INSTALL_METHOD="${OWPENBOT_INSTALL_METHOD:-npm}"
 
 usage() {
   cat <<'EOF'
-Owpenbot installer (WhatsApp-first)
+opencode-router installer (owpenbot)
 
 Environment variables:
   OWPENBOT_INSTALL_DIR  Install directory (default: ~/.openwork/owpenbot/openwork)
@@ -38,8 +38,8 @@ require_bin() {
 require_bin node
 
 if [[ "$OWPENBOT_INSTALL_METHOD" == "npm" ]]; then
-  echo "Installing owpenwork via npm..."
-  npm install -g owpenwork
+  echo "Installing opencode-router via npm..."
+  npm install -g opencode-router
 else
   require_bin git
   if ! command -v pnpm >/dev/null 2>&1; then
@@ -117,6 +117,13 @@ set -euo pipefail
 node "$OWPENBOT_INSTALL_DIR/packages/owpenbot/dist/cli.js" "$@"
 EOF
   chmod 755 "$OWPENBOT_BIN_DIR/owpenbot"
+
+  cat <<EOF > "$OWPENBOT_BIN_DIR/opencode-router"
+#!/usr/bin/env bash
+set -euo pipefail
+node "$OWPENBOT_INSTALL_DIR/packages/owpenbot/dist/cli.js" "$@"
+EOF
+  chmod 755 "$OWPENBOT_BIN_DIR/opencode-router"
 fi
 
 if ! echo ":$PATH:" | grep -q ":$OWPENBOT_BIN_DIR:"; then
@@ -139,9 +146,9 @@ fi
 
 cat <<EOF
 
-Owpenbot installed.
+opencode-router installed.
 
 Next steps:
 1) Edit: $ENV_PATH
-2) Run: owpenbot start
+2) Run: opencode-router start
 EOF

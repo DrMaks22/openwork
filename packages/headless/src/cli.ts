@@ -1321,7 +1321,7 @@ async function resolveExpectedVersion(
   }
   if (name === "owpenbot") {
     try {
-      const pkgPath = require.resolve("owpenwork/package.json");
+      const pkgPath = require.resolve("opencode-router/package.json");
       const version = await readPackageVersion(pkgPath);
       if (version) return version;
     } catch {
@@ -1688,7 +1688,7 @@ async function resolveOwpenbotBin(options: {
 
     const require = createRequire(import.meta.url);
     try {
-      const pkgPath = require.resolve("owpenwork/package.json");
+      const pkgPath = require.resolve("opencode-router/package.json");
       const pkgDir = dirname(pkgPath);
       const binaryPath = join(pkgDir, "dist", "bin", "owpenbot");
       if (await isExecutable(binaryPath)) {
@@ -1703,7 +1703,7 @@ async function resolveOwpenbotBin(options: {
     }
 
     throw new Error(
-      "owpenbot binary not found. Install the owpenwork dependency or pass --owpenbot-bin with --allow-external.",
+      "owpenbot binary not found. Install the opencode-router dependency or pass --owpenbot-bin with --allow-external.",
     );
   };
 
