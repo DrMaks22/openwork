@@ -101,7 +101,7 @@ export function DenValueSection(props: DenValueSectionProps) {
 
               <div className="flex flex-col gap-2">
                 <a
-                  href="mailto:ben@openwork.software?subject=We%20want%20to%20hire%20you"
+                  href="mailto:ben@openwork.software?subject=Please%20come%20Automate%20%7BTask%7D%20for%20%7BMoney_Amount%7D%20at%20%7BLocation%7D%20in%20SF.&body=Hey%20Ben%2C%0A%0AI%27m%20looking%20for%20a%20human%20to%20automate%20%7BTask%7D%20because%20%7BReason%7D.%0AThe%20reason%20I%20don%27t%20trust%20AI%20to%20do%20this%20is%3A%20%7BAI_Concern%7D.%0A%0ABudget%3A%20%7BMoney_Amount%7D%0ATimeline%3A%20%7BTimeline%7D"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex min-h-11 w-full flex-col items-center justify-center rounded-full border border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(246,248,251,0.98))] px-5 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(240,244,248,1))]"
