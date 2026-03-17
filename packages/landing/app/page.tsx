@@ -310,9 +310,8 @@ export default async function Home() {
             </h2>
             <p className="mb-8 text-[15px] leading-relaxed text-gray-600">
               OpenWork Cloud runs your automations so you don&apos;t have to
-              manage infrastructure. Join the waitlist to get early access and
-              a free series that walks you through automating every part of
-              your business.
+              manage infrastructure. Contact sales to talk through rollout,
+              hosted access, and the safest way to automate your team&apos;s work.
             </p>
 
             <div className="mb-10 grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
@@ -345,7 +344,7 @@ export default async function Home() {
               </div>
             </div>
 
-            <WaitlistForm />
+            <WaitlistForm contactHref={cal || "/enterprise#book"} />
           </section>
 
           <hr />
