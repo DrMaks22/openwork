@@ -1,0 +1,26 @@
+{
+  "name": "@openwork/den-legacy-migrator",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build:den-db && OPENWORK_DEV_MODE=1 tsx watch src/index.ts",
+    "build": "npm run build:den-db && tsc -p tsconfig.json",
+    "build:den-db": "npm --prefix ../../packages/den-db run build",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@openwork/den-db": "workspace:*",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.1",
+    "express": "^4.19.2",
+    "mysql2": "^3.11.3",
+    "typeid-js": "^1.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.30",
+    "tsx": "^4.15.7",
+    "typescript": "^5.5.4"
+  }
+}
