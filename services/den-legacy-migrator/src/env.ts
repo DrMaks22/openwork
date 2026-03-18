@@ -7,6 +7,8 @@ const schema = z.object({
   TARGET_DATABASE_HOST: z.string().optional(),
   TARGET_DATABASE_USERNAME: z.string().optional(),
   TARGET_DATABASE_PASSWORD: z.string().optional(),
+  RENDER_API_KEY: z.string().optional(),
+  RENDER_API_BASE: z.string().optional(),
   APP_USERNAME: z.string().min(1),
   APP_PASSWORD: z.string().min(1),
   PORT: z.string().optional(),
@@ -49,6 +51,10 @@ export const env = {
           password: parsed.TARGET_DATABASE_PASSWORD,
         }
       : null,
+  },
+  render: {
+    apiKey: parsed.RENDER_API_KEY,
+    apiBase: parsed.RENDER_API_BASE ?? "https://api.render.com/v1",
   },
   auth: {
     username: parsed.APP_USERNAME,

@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url"
 import express from "express"
 import { z } from "zod"
 import { env } from "./env.js"
-import { listLegacyUsers, previewMigration, runMigration } from "./migrate.js"
+import {
+  LEGACY_DELETE_CONFIRMATION,
+  listLegacyUsers,
+  previewMigration,
+  retireLegacyUsers,
+  runMigration,
+  stopLegacyRenderWorkers,
+} from "./migrate.js"
 
 const app = express()
 const currentFile = fileURLToPath(import.meta.url)
@@ -59,6 +66,10 @@ const selectionSchema = z.object({
   legacyUserIds: z.array(z.string().min(1)).min(1),
 })
 
+const cleanupSchema = selectionSchema.extend({
+  confirmation: z.string().min(1),
+})
+
 app.disable("x-powered-by")
 app.use(express.json({ limit: "1mb" }))
 app.use(requireBasicAuth)
@@ -92,6 +103,25 @@ app.post("/api/migrate", asyncRoute(async (req, res) => {
   const result = await runMigration(legacyUserIds)
   res.json({
     ...result,
+    generatedAt: new Date().toISOString(),
+  })
+}))
+
+app.post("/api/stop-workers", asyncRoute(async (req, res) => {
+  const { legacyUserIds } = selectionSchema.parse(req.body)
+  const result = await stopLegacyRenderWorkers(legacyUserIds)
+  res.json({
+    ...result,
+    generatedAt: new Date().toISOString(),
+  })
+}))
+
+app.post("/api/cleanup", asyncRoute(async (req, res) => {
+  const { legacyUserIds, confirmation } = cleanupSchema.parse(req.body)
+  const result = await retireLegacyUsers(legacyUserIds, confirmation)
+  res.json({
+    ...result,
+    expectedConfirmation: LEGACY_DELETE_CONFIRMATION,
     generatedAt: new Date().toISOString(),
   })
 }))

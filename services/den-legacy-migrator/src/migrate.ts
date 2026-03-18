@@ -27,6 +27,12 @@ import {
   LegacyWorkerTable,
   LegacyWorkerTokenTable,
 } from "./legacy-schema.js"
+import {
+  deleteRenderService,
+  hostFromUrl,
+  listRenderServices,
+  suspendRenderService,
+} from "./render.js"
 
 const denTypeIdPrefixes = {
   user: "usr",
@@ -104,6 +110,22 @@ type MigrationSummary = {
   workerBundles: number
   adminAllowlistRows: number
 }
+
+type RenderCleanupAction = {
+  workerId: string
+  workerName: string
+  instanceUrl: string | null
+  serviceId: string | null
+  serviceName: string | null
+  action: "suspend" | "delete"
+  status: "success" | "not_found"
+}
+
+type CleanupSummary = MigrationSummary & {
+  renderServicesTouched: number
+}
+
+const LEGACY_DELETE_CONFIRMATION = "DELETE LEGACY DATA"
 
 function unique<T>(values: T[]) {
   return Array.from(new Set(values))
@@ -316,6 +338,160 @@ function summarizePlan(plan: MigrationPlan): MigrationSummary {
     workerBundles: plan.includedWorkerBundles.length,
     adminAllowlistRows: plan.includedAdminAllowlist.length,
   }
+}
+
+function summarizeCleanup(plan: MigrationPlan, renderActions: RenderCleanupAction[]): CleanupSummary {
+  const renderServiceIds = new Set(renderActions.map((action) => action.serviceId).filter(Boolean))
+  return {
+    ...summarizePlan(plan),
+    renderServicesTouched: renderServiceIds.size,
+  }
+}
+
+async function resolveRenderTargets(plan: MigrationPlan) {
+  if (plan.includedWorkers.length === 0) {
+    return [] as Array<{
+      worker: LegacyWorker
+      instanceUrl: string | null
+      serviceId: string | null
+      serviceName: string | null
+    }>
+  }
+
+  const services = await listRenderServices()
+  const instanceUrlByWorkerId = new Map<string, string | null>()
+  for (const instance of plan.includedWorkerInstances) {
+    if (!instanceUrlByWorkerId.has(instance.worker_id)) {
+      instanceUrlByWorkerId.set(instance.worker_id, instance.url)
+    }
+  }
+
+  return plan.includedWorkers.map((worker) => {
+    const instanceUrl = instanceUrlByWorkerId.get(worker.id) ?? null
+    const targetHost = hostFromUrl(instanceUrl)
+    const workerHint = worker.id.slice(0, 8).toLowerCase()
+    const service = services.find((entry) => {
+      if (entry.name?.toLowerCase().includes(workerHint)) {
+        return true
+      }
+
+      return targetHost !== "" && hostFromUrl(entry.serviceDetails?.url) === targetHost
+    }) ?? null
+
+    return {
+      worker,
+      instanceUrl,
+      serviceId: service?.id ?? null,
+      serviceName: service?.name ?? service?.slug ?? null,
+    }
+  })
+}
+
+async function stopRenderWorkersForPlan(plan: MigrationPlan) {
+  const targets = await resolveRenderTargets(plan)
+  const actions: RenderCleanupAction[] = []
+
+  for (const target of targets) {
+    if (!target.serviceId) {
+      actions.push({
+        workerId: target.worker.id,
+        workerName: target.worker.name,
+        instanceUrl: target.instanceUrl,
+        serviceId: null,
+        serviceName: null,
+        action: "suspend",
+        status: "not_found",
+      })
+      continue
+    }
+
+    await suspendRenderService(target.serviceId)
+    actions.push({
+      workerId: target.worker.id,
+      workerName: target.worker.name,
+      instanceUrl: target.instanceUrl,
+      serviceId: target.serviceId,
+      serviceName: target.serviceName,
+      action: "suspend",
+      status: "success",
+    })
+  }
+
+  return actions
+}
+
+async function deleteRenderWorkersForPlan(plan: MigrationPlan) {
+  const targets = await resolveRenderTargets(plan)
+  const actions: RenderCleanupAction[] = []
+
+  for (const target of targets) {
+    if (!target.serviceId) {
+      actions.push({
+        workerId: target.worker.id,
+        workerName: target.worker.name,
+        instanceUrl: target.instanceUrl,
+        serviceId: null,
+        serviceName: null,
+        action: "delete",
+        status: "not_found",
+      })
+      continue
+    }
+
+    await suspendRenderService(target.serviceId)
+    actions.push({
+      workerId: target.worker.id,
+      workerName: target.worker.name,
+      instanceUrl: target.instanceUrl,
+      serviceId: target.serviceId,
+      serviceName: target.serviceName,
+      action: "suspend",
+      status: "success",
+    })
+
+    await deleteRenderService(target.serviceId)
+    actions.push({
+      workerId: target.worker.id,
+      workerName: target.worker.name,
+      instanceUrl: target.instanceUrl,
+      serviceId: target.serviceId,
+      serviceName: target.serviceName,
+      action: "delete",
+      status: "success",
+    })
+  }
+
+  return actions
+}
+
+async function deleteLegacyRows(tx: any, table: any, column: any, values: string[]) {
+  if (values.length === 0) {
+    return
+  }
+
+  for (const batch of chunk(unique(values), 100)) {
+    await tx.delete(table).where(inArray(column, batch))
+  }
+}
+
+async function deleteLegacyPlan(plan: MigrationPlan) {
+  const userIds = plan.includedUsers.map((user) => user.id)
+  const orgIds = plan.includedOrgs.map((org) => org.id)
+  const workerIds = plan.includedWorkers.map((worker) => worker.id)
+  const emails = plan.includedAdminAllowlist.map((row) => row.email)
+
+  await (legacyDb as any).transaction(async (tx: any) => {
+    await deleteLegacyRows(tx, LegacyWorkerBundleTable, LegacyWorkerBundleTable.worker_id, workerIds)
+    await deleteLegacyRows(tx, LegacyWorkerTokenTable, LegacyWorkerTokenTable.worker_id, workerIds)
+    await deleteLegacyRows(tx, LegacyWorkerInstanceTable, LegacyWorkerInstanceTable.worker_id, workerIds)
+    await deleteLegacyRows(tx, LegacyWorkerTable, LegacyWorkerTable.id, workerIds)
+    await deleteLegacyRows(tx, LegacyOrgMembershipTable, LegacyOrgMembershipTable.org_id, orgIds)
+    await deleteLegacyRows(tx, LegacyOrgTable, LegacyOrgTable.id, orgIds)
+    await deleteLegacyRows(tx, LegacyAccountTable, LegacyAccountTable.userId, userIds)
+    await deleteLegacyRows(tx, LegacySessionTable, LegacySessionTable.userId, userIds)
+    await deleteLegacyRows(tx, LegacyAdminAllowlistTable, LegacyAdminAllowlistTable.email, emails)
+    await deleteLegacyRows(tx, LegacyUserTable, LegacyUserTable.id, userIds)
+  })
 }
 
 async function upsertUsers(users: LegacyUser[]) {
@@ -675,6 +851,19 @@ export async function previewMigration(legacyUserIds: string[]) {
   }
 }
 
+export async function stopLegacyRenderWorkers(legacyUserIds: string[]) {
+  const plan = await buildMigrationPlan(legacyUserIds)
+  const renderActions = await stopRenderWorkersForPlan(plan)
+
+  return {
+    summary: summarizeCleanup(plan, renderActions),
+    roots: plan.rootUsers.map((user) => ({ id: user.id, email: user.email, name: user.name })),
+    autoIncludedUsers: plan.autoIncludedUsers.map((user) => ({ id: user.id, email: user.email, name: user.name })),
+    renderActions,
+    warnings: plan.warnings,
+  }
+}
+
 export async function runMigration(legacyUserIds: string[]) {
   const plan = await buildMigrationPlan(legacyUserIds)
   if (plan.conflicts.length > 0) {
@@ -705,3 +894,29 @@ export async function runMigration(legacyUserIds: string[]) {
     warnings: plan.warnings,
   }
 }
+
+export async function retireLegacyUsers(legacyUserIds: string[], confirmation: string) {
+  if (confirmation.trim() !== LEGACY_DELETE_CONFIRMATION) {
+    throw new Error(`Type ${LEGACY_DELETE_CONFIRMATION} to confirm cleanup.`)
+  }
+
+  const plan = await buildMigrationPlan(legacyUserIds)
+  const renderActions = await deleteRenderWorkersForPlan(plan)
+  await deleteLegacyPlan(plan)
+
+  return {
+    confirmation: LEGACY_DELETE_CONFIRMATION,
+    summary: summarizeCleanup(plan, renderActions),
+    deletedUsers: plan.includedUsers.map((user) => ({
+      legacyUserId: user.id,
+      email: user.email,
+      name: user.name,
+      root: plan.requestedLegacyUserIds.includes(user.id),
+    })),
+    autoIncludedUsers: plan.autoIncludedUsers.map((user) => ({ id: user.id, email: user.email, name: user.name })),
+    renderActions,
+    warnings: plan.warnings,
+  }
+}
+
+export { LEGACY_DELETE_CONFIRMATION }

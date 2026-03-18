@@ -8,6 +8,8 @@ Temporary internal admin app for migrating selected legacy Den users from the ol
 - lets you select one or more root users in a browser UI
 - previews the full migration graph anchored by those users
 - migrates the selected users plus any required org collaborators into the new database
+- can suspend or delete legacy Render worker services for the selected graph
+- can delete the migrated users and related legacy data from the old database after worker cleanup
 - rewrites old IDs into the new TypeID format deterministically so reruns stay stable
 
 ## What it migrates
@@ -37,6 +39,7 @@ Those tables are either ephemeral auth state, not required for user recovery, or
 - browser access is protected by HTTP Basic Auth via `APP_USERNAME` and `APP_PASSWORD`
 - no public API auth beyond that shared admin gate
 - `/health` stays unauthenticated for Render health checks
+- destructive cleanup requires an explicit typed confirmation in the UI
 
 ## Environment
 
@@ -47,6 +50,8 @@ Those tables are either ephemeral auth state, not required for user recovery, or
 - `APP_USERNAME`, `APP_PASSWORD` required
 - `LIST_USERS_LIMIT` optional user list cap; defaults to `250`
 - `PORT` optional; defaults to `8791`
+- `RENDER_API_KEY` optional, but required for the UI actions that suspend/delete Render worker services
+- `RENDER_API_BASE` optional; defaults to `https://api.render.com/v1`
 
 ## Local development
 
@@ -81,4 +86,5 @@ Because the legacy database is only reachable on Render's private network, deplo
 
 - the app uses deterministic legacy-id -> TypeID mapping, so repeated runs target the same new IDs
 - if the target database already contains the same email or org slug under a different ID, the app reports a conflict instead of guessing a merge
+- the cleanup action kills matching Render worker services first, then deletes the selected legacy graph from the old database in one destructive pass
 - this service is intended to be deleted once the legacy migration is complete
