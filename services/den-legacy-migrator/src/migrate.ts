@@ -10,12 +10,9 @@ import {
   WorkerInstanceTable,
   WorkerTable,
   WorkerTokenTable,
-  createDenDb,
-  denTypeIdPrefixes,
-  type DenTypeId,
-  type DenTypeIdName,
-} from "@openwork/den-db"
+} from "./target-schema.js"
 import { desc, inArray, like, or, sql } from "drizzle-orm"
+import { createTargetDb } from "./target-db.js"
 import { env } from "./env.js"
 import { legacyDb } from "./legacy-db.js"
 import {
@@ -31,11 +28,22 @@ import {
   LegacyWorkerTokenTable,
 } from "./legacy-schema.js"
 
-const target = createDenDb({
-  mode: env.target.mode,
-  databaseUrl: env.target.databaseUrl,
-  planetscale: env.target.planetscale,
-})
+const denTypeIdPrefixes = {
+  user: "usr",
+  account: "acc",
+  org: "org",
+  orgMembership: "om",
+  adminAllowlist: "aal",
+  worker: "wrk",
+  workerInstance: "wki",
+  workerToken: "wkt",
+  workerBundle: "wkb",
+} as const
+
+type DenTypeIdName = keyof typeof denTypeIdPrefixes
+type DenTypeId<TName extends DenTypeIdName> = `${(typeof denTypeIdPrefixes)[TName]}_${string}`
+
+const target = createTargetDb()
 
 const targetDb = target.db
 
@@ -159,7 +167,7 @@ async function buildConflictList(plan: Omit<MigrationPlan, "conflicts">) {
 
   if (emails.length > 0) {
     const targetUsers = await targetDb
-      .select({ id: AuthUserTable.id, email: AuthUserTable.email })
+      .select()
       .from(AuthUserTable)
       .where(or(inArray(AuthUserTable.id, mappedUserIds), inArray(AuthUserTable.email, emails)))
 
@@ -179,7 +187,7 @@ async function buildConflictList(plan: Omit<MigrationPlan, "conflicts">) {
 
   if (slugs.length > 0) {
     const targetOrgs = await targetDb
-      .select({ id: OrgTable.id, slug: OrgTable.slug })
+      .select()
       .from(OrgTable)
       .where(inArray(OrgTable.slug, slugs))
 
@@ -589,7 +597,7 @@ export async function listLegacyUsers(query: string) {
   const mappedUserIds = users.map((user) => mapLegacyId("user", user.id))
   const emails = users.map((user) => user.email)
   const targetUsers = await targetDb
-    .select({ id: AuthUserTable.id, email: AuthUserTable.email })
+    .select()
     .from(AuthUserTable)
     .where(or(inArray(AuthUserTable.id, mappedUserIds), inArray(AuthUserTable.email, emails)))
 

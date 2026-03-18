@@ -1,8 +1,8 @@
 import { drizzle } from "drizzle-orm/mysql2"
 import mysql from "mysql2/promise"
-import { parseMySqlConnectionConfig } from "@openwork/den-db"
 import { env } from "./env.js"
 import * as schema from "./legacy-schema.js"
+import { parseMySqlConnectionConfig } from "./mysql-config.js"
 
 export const legacyClient = mysql.createPool({
   ...parseMySqlConnectionConfig(env.legacyDatabaseUrl),
