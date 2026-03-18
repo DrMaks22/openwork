@@ -75,6 +75,16 @@ detect_tailscale_dns_name() {
   '
 }
 
+detect_mdns_hostname() {
+  local host
+  host="$(scutil --get LocalHostName 2>/dev/null || hostname -s 2>/dev/null || hostname 2>/dev/null || true)"
+  host="${host//$'\n'/}"
+  host="${host// /}"
+  host="${host%.local}"
+  [ -n "$host" ] || return 1
+  printf '%s.local\n' "$host"
+}
+
 detect_public_host() {
   if [ -n "${DEN_PUBLIC_HOST:-}" ]; then
     printf '%s\n' "$DEN_PUBLIC_HOST"
@@ -133,6 +143,7 @@ fi
 PUBLIC_HOST="$(detect_public_host)"
 LAN_IPV4="$(detect_lan_ipv4 || true)"
 TAILSCALE_DNS_NAME="$(detect_tailscale_dns_name || true)"
+MDNS_HOSTNAME="$(detect_mdns_hostname || true)"
 
 DEN_BETTER_AUTH_SECRET="${DEN_BETTER_AUTH_SECRET:-$(random_hex 32)}"
 DEN_BETTER_AUTH_URL="${DEN_BETTER_AUTH_URL:-http://$PUBLIC_HOST:$DEN_WEB_PORT}"
@@ -147,6 +158,11 @@ if [ -n "$LAN_IPV4" ]; then
   append_origin "http://$LAN_IPV4:$DEN_WEB_PORT"
   append_origin "http://$LAN_IPV4:$DEN_API_PORT"
   append_origin "http://$LAN_IPV4:$DEN_WORKER_PROXY_PORT"
+fi
+if [ -n "$MDNS_HOSTNAME" ]; then
+  append_origin "http://$MDNS_HOSTNAME:$DEN_WEB_PORT"
+  append_origin "http://$MDNS_HOSTNAME:$DEN_API_PORT"
+  append_origin "http://$MDNS_HOSTNAME:$DEN_WORKER_PROXY_PORT"
 fi
 DEN_BETTER_AUTH_TRUSTED_ORIGINS="${DEN_BETTER_AUTH_TRUSTED_ORIGINS:-$DEN_CORS_ORIGINS}"
 
@@ -228,6 +244,9 @@ fi
 if [ -n "$TAILSCALE_DNS_NAME" ]; then
   echo "OpenWork Cloud web UI (Tailscale):  http://$TAILSCALE_DNS_NAME:$DEN_WEB_PORT" >&2
 fi
+if [ -n "$MDNS_HOSTNAME" ]; then
+  echo "OpenWork Cloud web UI (mDNS):       http://$MDNS_HOSTNAME:$DEN_WEB_PORT" >&2
+fi
 echo "Den demo/API:          http://localhost:$DEN_API_PORT" >&2
 echo "Den demo/API (LAN/public):         http://$PUBLIC_HOST:$DEN_API_PORT" >&2
 if [ -n "$LAN_IPV4" ]; then
@@ -236,6 +255,9 @@ fi
 if [ -n "$TAILSCALE_DNS_NAME" ]; then
   echo "Den demo/API (Tailscale):          http://$TAILSCALE_DNS_NAME:$DEN_API_PORT" >&2
 fi
+if [ -n "$MDNS_HOSTNAME" ]; then
+  echo "Den demo/API (mDNS):               http://$MDNS_HOSTNAME:$DEN_API_PORT" >&2
+fi
 echo "Worker proxy:          http://localhost:$DEN_WORKER_PROXY_PORT" >&2
 echo "Worker proxy (LAN/public):         http://$PUBLIC_HOST:$DEN_WORKER_PROXY_PORT" >&2
 if [ -n "$LAN_IPV4" ]; then
@@ -243,6 +265,9 @@ if [ -n "$LAN_IPV4" ]; then
 fi
 if [ -n "$TAILSCALE_DNS_NAME" ]; then
   echo "Worker proxy (Tailscale):          http://$TAILSCALE_DNS_NAME:$DEN_WORKER_PROXY_PORT" >&2
+fi
+if [ -n "$MDNS_HOSTNAME" ]; then
+  echo "Worker proxy (mDNS):               http://$MDNS_HOSTNAME:$DEN_WORKER_PROXY_PORT" >&2
 fi
 echo "MySQL:                 mysql://root:password@127.0.0.1:$DEN_MYSQL_PORT/openwork_den" >&2
 echo "Health check:          http://localhost:$DEN_API_PORT/health" >&2

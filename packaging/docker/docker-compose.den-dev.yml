@@ -51,6 +51,7 @@ services:
     build:
       context: ../../
       dockerfile: packaging/docker/Dockerfile.den
+    command: ["sh", "-lc", "node services/den/scripts/run-sql-migrations.mjs && node services/den/dist/index.js"]
     depends_on:
       mysql:
         condition: service_healthy

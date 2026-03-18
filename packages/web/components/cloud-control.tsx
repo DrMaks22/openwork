@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 type Step = "auth" | "name" | "initializing" | "connect" | "workspace";
@@ -140,6 +141,12 @@ type DenSignupTrackPayload = {
   name: string | null;
   userId: string;
   authMethod: "email" | SocialAuthProvider;
+};
+
+type DenRoute = "start" | "checkout" | "dashboard";
+
+type CloudControlPanelProps = {
+  route?: DenRoute;
 };
 
 declare global {
@@ -1070,7 +1077,8 @@ function CredentialRow({
   );
 }
 
-export function CloudControlPanel() {
+export function CloudControlPanel({ route = "start" }: CloudControlPanelProps) {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("auth");
   const [shellView, setShellView] = useState<ShellView>("workers");
 
@@ -1266,11 +1274,23 @@ export function CloudControlPanel() {
   const billingSubscription = billingSummary?.subscription ?? null;
   const billingPrice = billingSummary?.price ?? null;
   const runtimeUpgradeCount = runtimeSnapshot?.services.filter((item) => item.upgradeAvailable).length ?? 0;
-  const onboardingPaywallRequired = Boolean(
-    signupOnboardingActive &&
-    !worker &&
-    (checkoutUrl || (billingSummary?.featureGateEnabled && !billingSummary.hasActivePlan))
+  const checkoutGateRequired = Boolean(
+    user && (effectiveCheckoutUrl || billingSummary?.checkoutRequired || (billingSummary?.featureGateEnabled && !billingSummary.hasActivePlan))
   );
+  const onboardingPaywallRequired = Boolean(
+    signupOnboardingActive && checkoutGateRequired
+  );
+  const isStartRoute = route === "start";
+  const isCheckoutRoute = route === "checkout";
+  const isDashboardRoute = route === "dashboard";
+
+  function goToDashboard() {
+    router.push("/dashboard");
+  }
+
+  function goToCheckout() {
+    router.push("/checkout");
+  }
 
   function appendEvent(level: EventLevel, label: string, detail: string) {
     setEvents((current) => {
@@ -1913,7 +1933,15 @@ export function CloudControlPanel() {
       if (desktopAuthRequested) {
         return;
       }
-      if (step === "auth" && !signupOnboardingActive) {
+      if (checkoutGateRequired && !isCheckoutRoute) {
+        router.replace("/checkout");
+        return;
+      }
+      if (isStartRoute && step === "auth" && !signupOnboardingActive) {
+        router.replace("/dashboard");
+        return;
+      }
+      if ((isDashboardRoute || isCheckoutRoute) && step === "auth" && !signupOnboardingActive) {
         setStep("workspace");
       }
       return;
@@ -1926,7 +1954,46 @@ export function CloudControlPanel() {
     setStep("auth");
     setSignupOnboardingActive(false);
     setAutoLaunchPending(false);
-  }, [checkoutUrl, desktopAuthRequested, sessionHydrated, signupOnboardingActive, step, user]);
+    if (!isStartRoute) {
+      router.replace("/");
+    }
+  }, [checkoutGateRequired, checkoutUrl, desktopAuthRequested, isCheckoutRoute, isDashboardRoute, isStartRoute, router, sessionHydrated, signupOnboardingActive, step, user]);
+
+  useEffect(() => {
+    if (!sessionHydrated) {
+      return;
+    }
+
+    if (isDashboardRoute) {
+      setShellView("workers");
+      if (user) {
+        setStep("workspace");
+      }
+      return;
+    }
+
+    if (isCheckoutRoute) {
+      setShellView("billing");
+      if (user) {
+        setStep("workspace");
+      }
+    }
+  }, [isCheckoutRoute, isDashboardRoute, sessionHydrated, user]);
+
+  useEffect(() => {
+    if (!sessionHydrated || !user) {
+      return;
+    }
+
+    if (checkoutGateRequired && !isCheckoutRoute) {
+      router.replace("/checkout");
+      return;
+    }
+
+    if (isCheckoutRoute && !checkoutGateRequired && billingSummary?.hasActivePlan) {
+      router.replace(worker ? "/dashboard" : "/");
+    }
+  }, [billingSummary?.hasActivePlan, checkoutGateRequired, isCheckoutRoute, router, sessionHydrated, user, worker]);
 
   useEffect(() => {
     if (step !== "workspace") {
@@ -2884,36 +2951,98 @@ export function CloudControlPanel() {
       <div className={isShellStep ? "flex min-h-0 w-full flex-1" : ""}>
 
         {step === "auth" ? (
-          <div className="mx-auto grid w-full max-w-[32rem] gap-6 px-1 py-2">
+          <div className="mx-auto grid w-full max-w-[72rem] gap-4 px-1 py-2 md:min-h-[calc(100vh-11rem)] md:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] md:items-stretch md:gap-6">
             {sessionHydrated ? (
-              <div className="grid gap-6 rounded-[32px] border border-white/70 bg-white/92 p-5 shadow-[0_28px_80px_-44px_rgba(15,23,42,0.35)] backdrop-blur md:p-6">
-                <div className="grid gap-3 text-center">
-                  <h1 className="text-[2rem] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--dls-text-primary)] md:text-[2.5rem]">
-                    {authMode === "sign-up" ? "Create your OpenWork Den account." : "Sign in to OpenWork Den."}
-                  </h1>
-                  <p className="mx-auto max-w-[24rem] text-[15px] leading-7 text-[var(--dls-text-secondary)]">
-                    Keep your tasks alive even when your computer sleeps.
-                  </p>
+              <>
+                <div className="relative overflow-hidden rounded-[32px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.98)_100%)] p-5 shadow-[0_30px_80px_-48px_rgba(15,23,42,0.35)] md:p-7">
+                  <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+                    <span className="absolute -left-10 top-0 h-40 w-40 rounded-full bg-sky-100/70 blur-3xl" />
+                    <span className="absolute right-0 top-10 h-48 w-48 rounded-full bg-indigo-100/60 blur-3xl" />
+                    <span className="absolute bottom-0 left-1/3 h-36 w-36 rounded-full bg-slate-200/60 blur-3xl" />
+                  </div>
+
+                  <div className="relative grid h-full content-between gap-8">
+                    <div className="grid gap-5">
+                      <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-sm">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        OpenWork Den
+                      </div>
+
+                      <div className="grid gap-3">
+                        <h1 className="max-w-[12ch] text-[2.35rem] font-semibold leading-[0.98] tracking-[-0.055em] text-[var(--dls-text-primary)] md:text-[4rem]">
+                          {authMode === "sign-up" ? "Keep your worker online from anywhere." : "Pick up your worker wherever you left off."}
+                        </h1>
+                        <p className="max-w-[34rem] text-[15px] leading-7 text-[var(--dls-text-secondary)] md:text-[16px]">
+                          {authMode === "sign-up"
+                            ? "Create your Den account, launch a cloud worker, and stay connected even when your laptop sleeps."
+                            : "Sign back in to manage your cloud worker, reopen your workspace, and continue running tasks from the same place."}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-[24px] border border-white/80 bg-white/78 p-4 shadow-sm backdrop-blur">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Always on</div>
+                          <p className="mt-2 text-[14px] leading-6 text-slate-700">Keep jobs alive without leaving your machine awake all day.</p>
+                        </div>
+                        <div className="rounded-[24px] border border-white/80 bg-white/78 p-4 shadow-sm backdrop-blur">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Fast reconnect</div>
+                          <p className="mt-2 text-[14px] leading-6 text-slate-700">Return to the same worker and continue from desktop or web.</p>
+                        </div>
+                        <div className="rounded-[24px] border border-white/80 bg-white/78 p-4 shadow-sm backdrop-blur">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Secure handoff</div>
+                          <p className="mt-2 text-[14px] leading-6 text-slate-700">Finish sign-in here and jump back into OpenWork when you are ready.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 rounded-[28px] border border-white/80 bg-white/82 p-4 shadow-sm backdrop-blur md:max-w-[34rem] md:p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">What happens next</div>
+                          <div className="mt-1 text-[15px] font-semibold text-slate-900">One page, then you are in.</div>
+                        </div>
+                        <div className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white">Step 1</div>
+                      </div>
+                      <div className="grid gap-2 text-[14px] leading-6 text-slate-700">
+                        <p>1. Authenticate with GitHub, Google, or email.</p>
+                        <p>2. Name your worker and let Den provision it.</p>
+                        <p>3. Connect from desktop or keep working in the browser.</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {desktopAuthRequested ? (
-                  <div className="rounded-[24px] border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
-                    Finish auth here and we&apos;ll bounce you back into the OpenWork desktop app automatically.
-                    {desktopRedirectUrl ? (
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs font-medium text-sky-900 transition hover:border-sky-300 hover:bg-sky-50"
-                          onClick={() => window.location.assign(desktopRedirectUrl)}
-                        >
-                          Open OpenWork
-                        </button>
-                      </div>
-                    ) : null}
+                <div className="grid content-start gap-4 rounded-[32px] border border-white/70 bg-white/92 p-4 shadow-[0_28px_80px_-44px_rgba(15,23,42,0.35)] backdrop-blur md:p-6">
+                  <div className="grid gap-2 px-1 text-left md:text-left">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {authMode === "sign-up" ? "Create your account" : "Welcome back"}
+                    </div>
+                    <h2 className="text-[1.9rem] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--dls-text-primary)] md:text-[2.4rem]">
+                      {authMode === "sign-up" ? "Start with a Den account." : "Sign in to OpenWork Den."}
+                    </h2>
+                    <p className="text-[14px] leading-6 text-[var(--dls-text-secondary)]">
+                      {authMode === "sign-up" ? "Use the option that gets you in fastest." : "Use the same provider or email you used before."}
+                    </p>
                   </div>
-                ) : null}
 
-                <form className="grid gap-3 rounded-[28px] border border-[var(--dls-border)] bg-white p-5 shadow-[var(--dls-card-shadow)] md:p-6" onSubmit={handleAuthSubmit}>
+                  {desktopAuthRequested ? (
+                    <div className="rounded-[24px] border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
+                      Finish auth here and we&apos;ll bounce you back into the OpenWork desktop app automatically.
+                      {desktopRedirectUrl ? (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs font-medium text-sky-900 transition hover:border-sky-300 hover:bg-sky-50"
+                            onClick={() => window.location.assign(desktopRedirectUrl)}
+                          >
+                            Open OpenWork
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <form className="grid gap-3 rounded-[28px] border border-[var(--dls-border)] bg-white p-5 shadow-[var(--dls-card-shadow)] md:p-6" onSubmit={handleAuthSubmit}>
                   <button
                     type="button"
                     className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -2971,31 +3100,35 @@ export function CloudControlPanel() {
                   >
                     {authBusy ? "Working..." : authMode === "sign-in" ? "Sign in" : "Create account"}
                   </button>
-                </form>
-
-                <div className="flex items-center justify-between gap-3 px-1 text-sm text-[var(--dls-text-secondary)]">
-                  <p>{authMode === "sign-in" ? "Need an account?" : "Already have an account?"}</p>
-                  <button
-                    type="button"
-                    className="font-medium text-[var(--dls-text-primary)] transition hover:opacity-70"
-                    onClick={() => {
-                      const nextMode = authMode === "sign-in" ? "sign-up" : "sign-in";
-                      setAuthMode(nextMode);
-                      setAuthInfo(getAuthInfoForMode(nextMode));
-                      setAuthError(null);
-                    }}
-                  >
-                    {authMode === "sign-in" ? "Create account" : "Switch to sign in"}
-                  </button>
-                </div>
-
-                {showAuthFeedback ? (
-                  <div className="grid gap-1 rounded-2xl border border-[var(--dls-border)] bg-[var(--dls-hover)] px-4 py-3 text-center text-[13px] text-[var(--dls-text-secondary)]" aria-live="polite">
-                    {authInfo !== defaultAuthInfo ? <p>{authInfo}</p> : null}
-                    {authError ? <p className="font-medium text-rose-600">{authError}</p> : null}
+                  <div className="flex items-center justify-between gap-3 px-1 text-sm text-[var(--dls-text-secondary)]">
+                    <p>{authMode === "sign-in" ? "Need an account?" : "Already have an account?"}</p>
+                    <button
+                      type="button"
+                      className="font-medium text-[var(--dls-text-primary)] transition hover:opacity-70"
+                      onClick={() => {
+                        const nextMode = authMode === "sign-in" ? "sign-up" : "sign-in";
+                        setAuthMode(nextMode);
+                        setAuthInfo(getAuthInfoForMode(nextMode));
+                        setAuthError(null);
+                      }}
+                    >
+                      {authMode === "sign-in" ? "Create account" : "Switch to sign in"}
+                    </button>
                   </div>
-                ) : null}
+
+                  {showAuthFeedback ? (
+                    <div className="grid gap-1 rounded-2xl border border-[var(--dls-border)] bg-[var(--dls-hover)] px-4 py-3 text-center text-[13px] text-[var(--dls-text-secondary)]" aria-live="polite">
+                      {authInfo !== defaultAuthInfo ? <p>{authInfo}</p> : null}
+                      {authError ? <p className="font-medium text-rose-600">{authError}</p> : null}
+                    </div>
+                  ) : null}
+                  </form>
+
+                <div className="rounded-[24px] border border-[var(--dls-border)] bg-[var(--dls-hover)] px-4 py-4 text-[13px] leading-6 text-[var(--dls-text-secondary)]">
+                  <span className="font-semibold text-[var(--dls-text-primary)]">Heads up:</span> first-time workers usually take around 1-2 minutes to provision after you sign in.
+                </div>
               </div>
+              </>
             ) : (
               <div className="grid gap-3 rounded-[32px] border border-white/70 bg-white/92 p-6 text-center shadow-[0_28px_80px_-44px_rgba(15,23,42,0.35)]">
                 <p className="text-sm text-slate-500">Checking your session...</p>
@@ -3106,7 +3239,10 @@ export function CloudControlPanel() {
                       <button
                         type="button"
                         className="inline-flex items-center justify-center rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-                        onClick={() => void refreshBilling({ includeCheckout: true })}
+                        onClick={() => {
+                          goToCheckout();
+                          void refreshBilling({ includeCheckout: true });
+                        }}
                         disabled={billingBusy || billingCheckoutBusy}
                       >
                         Fetch checkout link
@@ -3115,7 +3251,10 @@ export function CloudControlPanel() {
                     <button
                       type="button"
                       className="inline-flex items-center justify-center rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-                      onClick={() => void refreshBilling({ quiet: true })}
+                      onClick={() => {
+                        goToCheckout();
+                        void refreshBilling({ quiet: true });
+                      }}
                       disabled={billingBusy || billingCheckoutBusy}
                     >
                       I already paid
@@ -3128,7 +3267,7 @@ export function CloudControlPanel() {
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => setStep("workspace")}
+                  onClick={goToDashboard}
                   disabled={!worker}
                 >
                   Open dashboard
@@ -3223,7 +3362,7 @@ export function CloudControlPanel() {
                   className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                   onClick={() => {
                     setSignupOnboardingActive(false);
-                    setStep("workspace");
+                    goToDashboard();
                   }}
                 >
                   Go to dashboard
@@ -3248,7 +3387,10 @@ export function CloudControlPanel() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShellView("billing")}
+                  onClick={() => {
+                    setShellView("billing");
+                    goToCheckout();
+                  }}
                   className={`rounded-[12px] px-3 py-1.5 text-sm font-medium transition ${
                     shellView === "billing" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
                   }`}
@@ -3285,7 +3427,10 @@ export function CloudControlPanel() {
                         <button
                           type="button"
                           className="w-full rounded-[14px] px-3 py-2.5 text-left text-sm font-medium text-slate-500 transition hover:bg-slate-50"
-                          onClick={() => setShellView("billing")}
+                          onClick={() => {
+                            setShellView("billing");
+                            goToCheckout();
+                          }}
                         >
                           Billing
                         </button>
@@ -3387,7 +3532,10 @@ export function CloudControlPanel() {
                         {ownedWorkerCount > 0 ? (
                           <button
                             type="button"
-                            onClick={() => setShellView("billing")}
+                            onClick={() => {
+                              setShellView("billing");
+                              goToCheckout();
+                            }}
                             className="mt-3 inline-flex w-full items-center justify-center rounded-[12px] border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
                           >
                             Request an additional worker
@@ -3508,7 +3656,10 @@ export function CloudControlPanel() {
                       {ownedWorkerCount > 0 ? (
                         <button
                           type="button"
-                          onClick={() => setShellView("billing")}
+                          onClick={() => {
+                            setShellView("billing");
+                            goToCheckout();
+                          }}
                           className="mt-3 inline-flex w-full items-center justify-center rounded-[12px] border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
                         >
                           Request an additional worker
@@ -3970,7 +4121,10 @@ export function CloudControlPanel() {
                     <button
                       type="button"
                       className="rounded-[12px] border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => void refreshBilling()}
+                      onClick={() => {
+                        goToCheckout();
+                        void refreshBilling();
+                      }}
                       disabled={billingBusy || billingCheckoutBusy || billingSubscriptionBusy}
                     >
                       {billingBusy ? "Refreshing..." : "Refresh"}
@@ -3978,7 +4132,10 @@ export function CloudControlPanel() {
                     <button
                       type="button"
                       className="rounded-[12px] bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-                      onClick={() => setShellView("workers")}
+                      onClick={() => {
+                        setShellView("workers");
+                        goToDashboard();
+                      }}
                     >
                       Back to workers
                     </button>
@@ -4120,7 +4277,10 @@ export function CloudControlPanel() {
                         <button
                           type="button"
                           className="mt-3 rounded-[12px] bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => void refreshBilling({ includeCheckout: true })}
+                          onClick={() => {
+                            goToCheckout();
+                            void refreshBilling({ includeCheckout: true });
+                          }}
                           disabled={billingCheckoutBusy || billingBusy}
                         >
                           {billingCheckoutBusy ? "Generating checkout..." : "Generate checkout link"}
@@ -4134,7 +4294,10 @@ export function CloudControlPanel() {
                         <button
                           type="button"
                           className="rounded-[10px] border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => void refreshBilling({ quiet: true })}
+                          onClick={() => {
+                            goToCheckout();
+                            void refreshBilling({ quiet: true });
+                          }}
                           disabled={billingBusy || billingCheckoutBusy || billingSubscriptionBusy}
                         >
                           Refresh invoices
