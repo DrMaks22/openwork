@@ -63,8 +63,9 @@ What it does:
 - Starts **MySQL** for the Den service
 - Starts **Den control plane** on port 8788 inside Docker with `PROVISIONER_MODE=stub`
 - Runs **Den migrations** automatically before the API starts
-- Starts the **OpenWork Cloud web app** on port 3005 inside Docker
+- Starts the **OpenWork Cloud web app** on port 3005 inside Docker with `pnpm dev`
 - Points the web app's auth + API proxy routes at the local Den service
+- Bind-mounts the repo into the web container so edits under `packages/web/` hot reload without rebuilding the stack
 - Prints randomized host URLs so multiple stacks can run side by side
 
 Useful commands:

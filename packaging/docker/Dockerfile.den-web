@@ -2,12 +2,14 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app/packages/web
 
+RUN corepack enable
+
 COPY packages/web/package.json /app/packages/web/package.json
 
-RUN npm install --no-package-lock --no-fund --no-audit
+RUN pnpm install --no-frozen-lockfile
 
 COPY packages/web /app/packages/web
 
 EXPOSE 3005
 
-CMD ["npm", "run", "dev"]
+CMD ["pnpm", "dev"]

@@ -113,12 +113,14 @@ services:
     build:
       context: ../../
       dockerfile: packaging/docker/Dockerfile.den-web
-    command: ["sh", "-lc", "npm run build && npm run start"]
+    command: ["pnpm", "dev"]
     depends_on:
       den:
         condition: service_healthy
     ports:
       - "${DEN_WEB_PORT:-3005}:3005"
+    volumes:
+      - ../../:/app
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/api/den/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s

@@ -2872,12 +2872,12 @@ export function CloudControlPanel() {
   }
 
   return (
-    <section
+    <div
       className={
         isShellStep
           ? "flex min-h-0 w-full flex-1"
           : step === "auth"
-            ? "mx-auto w-full max-w-[32rem] rounded-[32px] border border-[var(--dls-border)] bg-white/95 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] md:p-6"
+            ? "w-full"
             : "mx-auto w-full max-w-[48rem] rounded-[32px] border border-[var(--dls-border)] bg-white/95 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] md:max-w-none md:p-6"
       }
     >
@@ -4181,6 +4181,6 @@ export function CloudControlPanel() {
         ) : null}
 
       </div>
-    </section>
+    </div>
   );
 }
