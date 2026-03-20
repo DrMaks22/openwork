@@ -50,16 +50,43 @@ if [ -n "$SNAPSHOT_REGION" ]; then
   args+=(--region "$SNAPSHOT_REGION")
 fi
 
-if delete_output="$(daytona snapshot delete "$SNAPSHOT_NAME" 2>&1)"; then
-  echo "Deleted existing Daytona snapshot $SNAPSHOT_NAME" >&2
-else
-  delete_status=$?
-  if printf '%s' "$delete_output" | tr '[:upper:]' '[:lower:]' | grep -q "not found"; then
-    :
-  else
-    printf '%s\n' "$delete_output" >&2
-    exit "$delete_status"
+SNAPSHOT_PAGE_LIMIT=100
+SNAPSHOT_PAGE=1
+EXISTING_SNAPSHOT_ID=""
+
+while :; do
+  snapshot_page_json="$(daytona snapshot list --format json --page "$SNAPSHOT_PAGE" --limit "$SNAPSHOT_PAGE_LIMIT")"
+  page_result="$(printf '%s' "$snapshot_page_json" | node -e '
+const fs = require("fs");
+
+const target = process.argv[1];
+const raw = fs.readFileSync(0, "utf8").trim();
+const items = raw ? JSON.parse(raw) : [];
+
+if (!Array.isArray(items)) {
+  throw new Error("Expected Daytona snapshot list JSON array");
+}
+
+const match = items.find((item) => item && item.name === target);
+process.stdout.write(`${match && typeof match.id === "string" ? match.id : ""}|${items.length}`);
+' "$SNAPSHOT_NAME")"
+  EXISTING_SNAPSHOT_ID="${page_result%%|*}"
+  SNAPSHOT_PAGE_COUNT="${page_result#*|}"
+
+  if [ -n "$EXISTING_SNAPSHOT_ID" ]; then
+    break
   fi
+
+  if [ "${SNAPSHOT_PAGE_COUNT:-0}" -lt "$SNAPSHOT_PAGE_LIMIT" ]; then
+    break
+  fi
+
+  SNAPSHOT_PAGE=$((SNAPSHOT_PAGE + 1))
+done
+
+if [ -n "$EXISTING_SNAPSHOT_ID" ]; then
+  echo "Deleting existing Daytona snapshot $SNAPSHOT_NAME" >&2
+  daytona snapshot delete "$EXISTING_SNAPSHOT_ID"
 fi
 
 echo "Pushing Daytona snapshot $SNAPSHOT_NAME" >&2
