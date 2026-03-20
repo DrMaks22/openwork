@@ -144,5 +144,7 @@ jobs:
             exit 1
           fi
 
+          daytona login --api-key "$DAYTONA_API_KEY"
+
           echo "Publishing Daytona snapshot: ${DAYTONA_SNAPSHOT_NAME}"
           ./scripts/create-daytona-openwork-snapshot.sh "${DAYTONA_SNAPSHOT_NAME}"
