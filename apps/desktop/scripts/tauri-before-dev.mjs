@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const useCorepackPnpm = process.platform === "win32" && process.env.OPENWORK_USE_COREPACK_PNPM === "1";
+const pnpmCmd = useCorepackPnpm ? "corepack.cmd" : process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const pnpmArgs = useCorepackPnpm ? ["pnpm"] : [];
 
 const readPort = () => {
   const value = Number.parseInt(process.env.PORT ?? "", 10);
@@ -193,12 +195,17 @@ const ensureLinuxDesktopDependencies = () => {
 };
 
 const runUiDevServer = () => {
-  const child = spawn(pnpmCmd, ["-w", "dev:ui"], {
+  const uiArgs = useCorepackPnpm
+    ? [...pnpmArgs, "--filter", "@openwork/app", "exec", "vite"]
+    : [...pnpmArgs, "-w", "dev:ui"];
+
+  const child = spawn(pnpmCmd, uiArgs, {
     stdio: "inherit",
     shell: process.platform === "win32",
     detached: process.platform !== "win32",
     env: {
       ...process.env,
+      OPENWORK_DEV_MODE: process.env.OPENWORK_DEV_MODE || "1",
       // Make sure vite sees the intended port.
       PORT: String(port),
     },
