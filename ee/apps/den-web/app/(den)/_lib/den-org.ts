@@ -103,7 +103,7 @@ function parsePermissionRecord(value: unknown): Record<string, string[]> {
       .map(([resource, actions]) => [
         resource,
         actions.filter((entry: unknown): entry is string => typeof entry === "string"),
-      ])
+      ]),
   );
 }
 

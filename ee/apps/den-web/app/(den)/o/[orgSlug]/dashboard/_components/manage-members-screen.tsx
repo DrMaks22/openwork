@@ -45,11 +45,11 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <article className="den-frame grid gap-5 p-5 md:p-6">
+    <article className="rounded-[28px] border border-[var(--dls-border)] bg-white p-5 shadow-[var(--dls-card-shadow)] md:p-6">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-[var(--dls-text-primary)]">{title}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-[var(--dls-text-secondary)]">{description}</p>
+          <h2 className="text-xl font-semibold tracking-tight text-[var(--dls-text-primary)]">{title}</h2>
+          <p className="mt-1 text-sm text-[var(--dls-text-secondary)]">{description}</p>
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
@@ -69,14 +69,16 @@ function SectionButton({
   tone?: "default" | "danger";
   disabled?: boolean;
 }) {
-  const className = tone === "danger" ? "den-button-danger" : "den-button-secondary";
+  const className = tone === "danger"
+    ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+    : "border-[var(--dls-border)] bg-[var(--dls-surface)] text-[var(--dls-text-secondary)] hover:bg-[var(--dls-hover)] hover:text-[var(--dls-text-primary)]";
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={className}
+      className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {children}
     </button>
@@ -84,7 +86,7 @@ function SectionButton({
 }
 
 function InlinePanel({ children }: { children: ReactNode }) {
-  return <div className="den-frame-inset mb-4 rounded-[1.5rem] p-4 md:p-5">{children}</div>;
+  return <div className="mb-4 rounded-[24px] border border-[var(--dls-border)] bg-[var(--dls-sidebar)] p-4 md:p-5">{children}</div>;
 }
 
 export function ManageMembersScreen() {
@@ -157,8 +159,8 @@ export function ManageMembersScreen() {
 
   if (orgBusy && !orgContext) {
     return (
-      <section className="den-page flex max-w-6xl flex-col gap-4 py-4 md:py-8">
-        <div className="den-frame-soft p-6">
+      <section className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-12">
+        <div className="rounded-[28px] border border-[var(--dls-border)] bg-white p-6 shadow-[var(--dls-card-shadow)]">
           <p className="text-sm text-[var(--dls-text-secondary)]">Loading organization details...</p>
         </div>
       </section>
@@ -167,8 +169,8 @@ export function ManageMembersScreen() {
 
   if (!orgContext || !activeOrg) {
     return (
-      <section className="den-page flex max-w-6xl flex-col gap-4 py-4 md:py-8">
-        <div className="den-frame-soft p-6">
+      <section className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-12">
+        <div className="rounded-[28px] border border-[var(--dls-border)] bg-white p-6 shadow-[var(--dls-card-shadow)]">
           <p className="text-sm font-medium text-rose-600">{orgError ?? "Organization details are unavailable."}</p>
         </div>
       </section>
@@ -176,25 +178,25 @@ export function ManageMembersScreen() {
   }
 
   return (
-    <section className="den-page flex max-w-6xl flex-col gap-6 py-4 md:py-8">
-      <div className="den-frame p-6 md:p-8 lg:p-10">
+    <section className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:p-12">
+      <div className="rounded-[32px] border border-[var(--dls-border)] bg-white p-6 shadow-[var(--dls-card-shadow)] md:p-8">
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div>
-            <p className="den-eyebrow">OpenWork Cloud</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--dls-text-secondary)]">Manage Members</p>
             <h1 className="mt-2 text-[2.4rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[var(--dls-text-primary)]">
-              Members
+              {activeOrg.name}
             </h1>
             <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[var(--dls-text-secondary)]">
-              Invite teammates, adjust roles, and keep access clean without turning this into an admin maze.
+              See everyone in the organization, invite new people, and keep roles tidy without the permission matrix taking over the page.
             </p>
           </div>
-          <div className="den-frame-inset rounded-[1.25rem] px-4 py-3 text-sm text-[var(--dls-text-secondary)]">
+          <div className="rounded-2xl border border-[var(--dls-border)] bg-[var(--dls-sidebar)] px-4 py-3 text-sm text-[var(--dls-text-secondary)]">
             Your role: <span className="font-semibold text-[var(--dls-text-primary)]">{formatRoleLabel(orgContext.currentMember.role)}</span>
           </div>
         </div>
       </div>
 
-      {pageError ? <div className="den-notice is-error">{pageError}</div> : null}
+      {pageError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{pageError}</div> : null}
 
       <SectionCard
         title="Members"
@@ -217,23 +219,23 @@ export function ManageMembersScreen() {
               }}
             >
               <label className="grid gap-2">
-                <span className="den-label">Email</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">Email</span>
                 <input
                   type="email"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                   placeholder="teammate@example.com"
                   required
-                    className="den-input"
-                  />
-                </label>
-                <label className="grid gap-2">
-                  <span className="den-label">Role</span>
-                  <select
-                    value={inviteRole}
-                    onChange={(event) => setInviteRole(event.target.value)}
-                    className="den-select"
-                  >
+                  className="rounded-2xl border border-[var(--dls-border)] bg-white px-4 py-3 text-sm text-[var(--dls-text-primary)] outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-900/5"
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">Role</span>
+                <select
+                  value={inviteRole}
+                  onChange={(event) => setInviteRole(event.target.value)}
+                  className="rounded-2xl border border-[var(--dls-border)] bg-white px-4 py-3 text-sm text-[var(--dls-text-primary)] outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-900/5"
+                >
                   {assignableRoles.map((role) => (
                     <option key={role.id} value={role.role}>
                       {formatRoleLabel(role.role)}
@@ -245,7 +247,7 @@ export function ManageMembersScreen() {
                 <SectionButton onClick={resetInviteForm}>Cancel</SectionButton>
                 <button
                   type="submit"
-                  className="den-button-primary"
+                  className="rounded-2xl bg-[#011627] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={mutationBusy === "invite-member"}
                 >
                   {mutationBusy === "invite-member" ? "Sending..." : "Send invite"}
@@ -271,12 +273,12 @@ export function ManageMembersScreen() {
               }}
             >
               <label className="grid gap-2">
-                  <span className="den-label">Role</span>
-                  <select
-                    value={memberRoleDraft}
-                    onChange={(event) => setMemberRoleDraft(event.target.value)}
-                    className="den-select"
-                  >
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">Role</span>
+                <select
+                  value={memberRoleDraft}
+                  onChange={(event) => setMemberRoleDraft(event.target.value)}
+                  className="rounded-2xl border border-[var(--dls-border)] bg-white px-4 py-3 text-sm text-[var(--dls-text-primary)] outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-900/5"
+                >
                   {assignableRoles.map((role) => (
                     <option key={role.id} value={role.role}>
                       {formatRoleLabel(role.role)}
@@ -288,7 +290,7 @@ export function ManageMembersScreen() {
                 <SectionButton onClick={resetMemberEditor}>Cancel</SectionButton>
                 <button
                   type="submit"
-                  className="den-button-primary"
+                  className="rounded-2xl bg-[#011627] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={mutationBusy === "update-member-role"}
                 >
                   {mutationBusy === "update-member-role" ? "Saving..." : "Save member"}
@@ -298,7 +300,7 @@ export function ManageMembersScreen() {
           </InlinePanel>
         ) : null}
 
-        <div className="den-list-shell overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--dls-border)] text-left text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">
@@ -310,7 +312,7 @@ export function ManageMembersScreen() {
             </thead>
             <tbody>
               {orgContext.members.map((member) => (
-                <tr key={member.id} className="border-b border-[var(--dls-border)] last:border-b-0 bg-white">
+                <tr key={member.id} className="border-b border-[var(--dls-border)] last:border-b-0">
                   <td className="px-3 py-4">
                     <div className="grid gap-1">
                       <span className="font-semibold text-[var(--dls-text-primary)]">{member.user.name}</span>
@@ -368,7 +370,7 @@ export function ManageMembersScreen() {
         title="Pending invitations"
         description={access.canCancelInvitations ? "Admins and owners can revoke pending invites before they are accepted." : "Pending invites are visible here once they have been sent."}
       >
-        <div className="den-list-shell overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--dls-border)] text-left text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">
@@ -384,7 +386,7 @@ export function ManageMembersScreen() {
                   <td colSpan={4} className="px-3 py-6 text-sm text-[var(--dls-text-secondary)]">No pending invitations.</td>
                 </tr>
               ) : pendingInvitations.map((invitation) => (
-                <tr key={invitation.id} className="border-b border-[var(--dls-border)] last:border-b-0 bg-white">
+                <tr key={invitation.id} className="border-b border-[var(--dls-border)] last:border-b-0">
                   <td className="px-3 py-4 font-medium text-[var(--dls-text-primary)]">{invitation.email}</td>
                   <td className="px-3 py-4 text-[var(--dls-text-secondary)]">{formatRoleLabel(invitation.role)}</td>
                   <td className="px-3 py-4 text-[var(--dls-text-secondary)]">{invitation.expiresAt ? new Date(invitation.expiresAt).toLocaleDateString() : "-"}</td>
@@ -443,20 +445,20 @@ export function ManageMembersScreen() {
               }}
             >
               <label className="grid gap-2 md:max-w-sm">
-                <span className="den-label">Role name</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">Role name</span>
                 <input
                   type="text"
                   value={roleNameDraft}
                   onChange={(event) => setRoleNameDraft(event.target.value)}
                   placeholder="qa-reviewer"
                   required
-                  className="den-input"
+                  className="rounded-2xl border border-[var(--dls-border)] bg-white px-4 py-3 text-sm text-[var(--dls-text-primary)] outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-900/5"
                 />
               </label>
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {Object.entries(DEN_ROLE_PERMISSION_OPTIONS).map(([resource, actions]) => (
-                  <div key={resource} className="den-frame-soft rounded-[1.5rem] p-4">
+                  <div key={resource} className="rounded-2xl border border-[var(--dls-border)] bg-white p-4">
                     <p className="mb-3 text-sm font-semibold text-[var(--dls-text-primary)]">{formatRoleLabel(resource)}</p>
                     <div className="grid gap-2">
                       {actions.map((action) => {
@@ -481,7 +483,7 @@ export function ManageMembersScreen() {
                 <SectionButton onClick={resetRoleEditor}>Cancel</SectionButton>
                 <button
                   type="submit"
-                  className="den-button-primary"
+                  className="rounded-2xl bg-[#011627] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={mutationBusy === "create-role" || mutationBusy === "update-role"}
                 >
                   {mutationBusy === "create-role" || mutationBusy === "update-role"
@@ -495,7 +497,7 @@ export function ManageMembersScreen() {
           </InlinePanel>
         ) : null}
 
-        <div className="den-list-shell overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--dls-border)] text-left text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--dls-text-secondary)]">
@@ -506,7 +508,7 @@ export function ManageMembersScreen() {
             </thead>
             <tbody>
               {orgContext.roles.map((role) => (
-                <tr key={role.id} className="border-b border-[var(--dls-border)] last:border-b-0 bg-white">
+                <tr key={role.id} className="border-b border-[var(--dls-border)] last:border-b-0">
                   <td className="px-3 py-4 font-medium text-[var(--dls-text-primary)]">{formatRoleLabel(role.role)}</td>
                   <td className="px-3 py-4 text-[var(--dls-text-secondary)]">{role.protected ? "System" : role.builtIn ? "Default" : "Custom"}</td>
                   <td className="px-3 py-4">

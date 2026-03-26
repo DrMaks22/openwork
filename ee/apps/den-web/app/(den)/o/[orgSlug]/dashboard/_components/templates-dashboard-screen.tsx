@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { requestJson, getErrorMessage } from "../../../../_lib/den-flow";
+import { getErrorMessage, requestJson } from "../../../../_lib/den-flow";
 import { getMembersRoute } from "../../../../_lib/den-org";
 import { useOrgDashboard } from "../_providers/org-dashboard-provider";
 import { OPENWORK_DOCS_URL, useOrgTemplates } from "./shared-setup-data";
@@ -12,7 +12,6 @@ export function SharedSetupsScreen() {
   const { templates, busy, error, reloadTemplates } = useOrgTemplates(orgSlug);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
   const canDelete = orgContext?.currentMember.isOwner ?? false;
 
   async function deleteTemplate(templateId: string) {
