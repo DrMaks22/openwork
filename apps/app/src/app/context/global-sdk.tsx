@@ -10,16 +10,27 @@ import {
   type ParentProps,
 } from "solid-js";
 
+import { createBufferedGlobalEventRelay } from "../lib/global-event-relay";
 import { usePlatform } from "./platform";
 import { useServer } from "./server";
 
-type GlobalSDKContextValue = {
+export type GlobalSDKContextValue = {
   url: () => string;
   client: () => ReturnType<typeof createOpencodeClient>;
   event: ReturnType<typeof createGlobalEmitter<{ [key: string]: Event }>>;
 };
 
 const GlobalSDKContext = createContext<GlobalSDKContextValue | undefined>(undefined);
+
+export function GlobalSDKValueProvider(
+  props: ParentProps & { value: GlobalSDKContextValue },
+) {
+  return (
+    <GlobalSDKContext.Provider value={props.value}>
+      {props.children}
+    </GlobalSDKContext.Provider>
+  );
+}
 
 export function GlobalSDKProvider(props: ParentProps) {
   const server = useServer();
@@ -71,52 +82,11 @@ export function GlobalSDKProvider(props: ParentProps) {
       signal: abort.signal,
       fetch: platform.fetch,
     });
-
-    type Queued = { directory: string; payload: Event };
-
-    let queue: Array<Queued | undefined> = [];
-    const coalesced = new Map<string, number>();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let last = 0;
-
-    const keyForEvent = (directory: string, payload: Event) => {
-      if (payload.type === "session.status") return `session.status:${directory}:${payload.properties.sessionID}`;
-      if (payload.type === "lsp.updated") return `lsp.updated:${directory}`;
-      if (payload.type === "todo.updated") return `todo.updated:${directory}:${payload.properties.sessionID}`;
-      if (payload.type === "mcp.tools.changed") return `mcp.tools.changed:${directory}:${payload.properties.server}`;
-      if (payload.type === "message.part.updated") {
-        const part = payload.properties.part;
-        return `message.part.updated:${directory}:${part.messageID}:${part.id}`;
-      }
-    };
-
-    const flush = () => {
-      if (timer) clearTimeout(timer);
-      timer = undefined;
-
-      const events = queue;
-      queue = [];
-      coalesced.clear();
-      if (events.length === 0) return;
-
-      last = Date.now();
+    const relay = createBufferedGlobalEventRelay((directory, payload) => {
       batch(() => {
-        for (const entry of events) {
-          if (!entry) continue;
-          emitter.emit(entry.directory, entry.payload);
-        }
+        emitter.emit(directory, payload);
       });
-    };
-
-    const schedule = () => {
-      if (timer) return;
-      const elapsed = Date.now() - last;
-      timer = setTimeout(flush, Math.max(0, 16 - elapsed));
-    };
-
-    const stop = () => {
-      flush();
-    };
+    });
 
     void (async () => {
       const subscription = await eventClient.event.subscribe(undefined, { signal: abort.signal });
@@ -128,29 +98,19 @@ export function GlobalSDKProvider(props: ParentProps) {
         if (!payload?.type) continue;
 
         const directory = typeof record.directory === "string" ? record.directory : "global";
-        const key = keyForEvent(directory, payload);
-        if (key) {
-          const index = coalesced.get(key);
-          if (index !== undefined) {
-            queue[index] = undefined;
-          }
-          coalesced.set(key, queue.length);
-        }
-
-        queue.push({ directory, payload });
-        schedule();
+        relay.push(directory, payload);
 
         if (Date.now() - yielded < 8) continue;
         yielded = Date.now();
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
     })()
-      .finally(stop)
+      .finally(() => relay.stop())
       .catch(() => undefined);
 
     onCleanup(() => {
       abort.abort();
-      stop();
+      relay.stop();
     });
   });
 
@@ -160,7 +120,7 @@ export function GlobalSDKProvider(props: ParentProps) {
     event: emitter,
   };
 
-  return <GlobalSDKContext.Provider value={value}>{props.children}</GlobalSDKContext.Provider>;
+  return <GlobalSDKValueProvider value={value}>{props.children}</GlobalSDKValueProvider>;
 }
 
 export function useGlobalSDK() {

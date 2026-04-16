@@ -19,7 +19,7 @@ type LocalPreferences = {
   };
 };
 
-type LocalContextValue = {
+export type LocalContextValue = {
   ui: Store<LocalUIState>;
   setUi: SetStoreFunction<LocalUIState>;
   prefs: Store<LocalPreferences>;
@@ -28,6 +28,16 @@ type LocalContextValue = {
 };
 
 const LocalContext = createContext<LocalContextValue | undefined>(undefined);
+
+export function LocalValueProvider(
+  props: ParentProps & { value: LocalContextValue },
+) {
+  return (
+    <LocalContext.Provider value={props.value}>
+      {props.children}
+    </LocalContext.Provider>
+  );
+}
 
 export function LocalProvider(props: ParentProps) {
   const [ui, setUi, , uiReady] = persisted(
@@ -83,7 +93,7 @@ export function LocalProvider(props: ParentProps) {
     ready,
   };
 
-  return <LocalContext.Provider value={value}>{props.children}</LocalContext.Provider>;
+  return <LocalValueProvider value={value}>{props.children}</LocalValueProvider>;
 }
 
 export function useLocal() {

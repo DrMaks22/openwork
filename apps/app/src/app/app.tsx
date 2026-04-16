@@ -1,7 +1,5 @@
 import {
-  Match,
   Show,
-  Switch,
   createEffect,
   createMemo,
   createSignal,
@@ -9,6 +7,7 @@ import {
   onMount,
   untrack,
 } from "solid-js";
+import type { JSX } from "solid-js";
 
 import { useLocation, useNavigate } from "@solidjs/router";
 
@@ -33,6 +32,8 @@ import { createDeepLinksController } from "./shell/deep-links";
 import SettingsShell from "./shell/settings-shell";
 import TopRightNotifications from "./shell/top-right-notifications";
 import { createStatusToastsStore, StatusToastsProvider } from "./shell/status-toasts";
+import ReactShellHost from "./shell/react-shell-host";
+import SolidContextBridge from "./shell/solid-context-bridge";
 import {
   CreateRemoteWorkspaceModal,
   CreateWorkspaceModal,
@@ -98,6 +99,10 @@ import { createConnectionsStore } from "./connections/store";
 import { createAutomationsStore } from "./context/automations";
 import { createSidebarSessionsStore } from "./context/sidebar-sessions";
 import { useGlobalSync } from "./context/global-sync";
+import { useGlobalSDK } from "./context/global-sdk";
+import { useLocal } from "./context/local";
+import { usePlatform } from "./context/platform";
+import { useServer } from "./context/server";
 import { createWorkspaceStore } from "./context/workspace";
 import {
   updaterEnvironment,
@@ -113,7 +118,6 @@ import {
   readStoredFontZoom,
 } from "./lib/font-zoom";
 import {
-  buildOpenworkWorkspaceBaseUrl,
   parseOpenworkWorkspaceIdFromUrl,
   readOpenworkConnectInviteFromSearch,
   stripOpenworkConnectInviteFromUrl,
@@ -123,6 +127,7 @@ import {
   writeOpenworkServerSettings,
   type OpenworkServerSettings,
 } from "./lib/openwork-server";
+import { resolveOpenworkSessionRuntime } from "./lib/openwork-session-runtime";
 import { ReactIsland } from "../react/island";
 import { reactSessionEnabled } from "../react/feature-flag";
 import { ReactSessionRuntime } from "../react/session/runtime-sync.react";
@@ -138,6 +143,7 @@ import {
   type StartupBranch,
   type StartupTraceEvent,
 } from "./lib/startup-boot";
+import { syncShellRoute } from "./shell/route-sync";
 
 type SettingsReturnTarget = {
   view: View;
@@ -459,7 +465,11 @@ export default function App() {
     }
   };
 
+  const platform = usePlatform();
+  const server = useServer();
+  const globalSDK = useGlobalSDK();
   const globalSync = useGlobalSync();
+  const local = useLocal();
   const providers = createMemo(() => globalSync.data.provider.all ?? []);
   const providerDefaults = createMemo(() => globalSync.data.provider.default ?? {});
   const providerConnectedIds = createMemo(() => globalSync.data.provider.connected ?? []);
@@ -2309,116 +2319,63 @@ export default function App() {
   });
 
   const reactSessionRuntimeEnabled = createMemo(() => reactSessionEnabled());
-  const reactSessionRuntimeBaseUrl = createMemo(() => {
-    const workspaceId = runtimeWorkspaceId()?.trim() ?? "";
-    const baseUrl = openworkServerClient()?.baseUrl?.trim() ?? "";
-    if (!workspaceId || !baseUrl) return "";
-    const mounted = buildOpenworkWorkspaceBaseUrl(baseUrl, workspaceId) ?? baseUrl;
-    return `${mounted.replace(/\/+$/, "")}/opencode`;
-  });
-  const reactSessionRuntimeToken = createMemo(
-    () => openworkServerClient()?.token?.trim() || openworkServerSettings().token?.trim() || "",
+  const reactSessionRuntime = createMemo(() =>
+    resolveOpenworkSessionRuntime({
+      workspaceId: runtimeWorkspaceId(),
+      client: openworkServerClient(),
+      settings: openworkServerSettings(),
+    }),
   );
   const showReactSessionRuntime = createMemo(
     () =>
       reactSessionRuntimeEnabled() &&
       openworkServerStatus() === "connected" &&
-      Boolean(runtimeWorkspaceId()?.trim() && reactSessionRuntimeBaseUrl() && reactSessionRuntimeToken()),
+      Boolean(reactSessionRuntime()),
   );
-
-  const settingsTabs = new Set<SettingsTab>([
-    "general",
-    "den",
-    "automations",
-    "skills",
-    "extensions",
-    "messaging",
-    "advanced",
-    "appearance",
-    "updates",
-    "recovery",
-    "debug",
-  ]);
-
-  const resolveSettingsTab = (value?: string | null) => {
-    const normalized = value?.trim().toLowerCase() ?? "";
-    if (settingsTabs.has(normalized as SettingsTab)) {
-      return normalized as SettingsTab;
-    }
-    return "general";
-  };
-
-  createEffect(() => {
-    const rawPath = location.pathname.trim();
-    const path = rawPath.toLowerCase();
-
-    if (path === "" || path === "/") {
-      navigate("/session", { replace: true });
-      return;
-    }
-
-    if (path.startsWith("/settings")) {
-      const [, , tabSegment] = path.split("/");
-      const resolvedTab = resolveSettingsTab(tabSegment);
-
-      if (resolvedTab !== settingsTab()) {
-        setSettingsTabState(resolvedTab);
-      }
-      if (!tabSegment || tabSegment !== resolvedTab) {
-        goToSettings(resolvedTab, { replace: true });
-      }
-      return;
-    }
-
-    if (path.startsWith("/session")) {
-      const [, , sessionSegment] = rawPath.split("/");
-      const id = (sessionSegment ?? "").trim();
-
-      if (!id) {
-        if (selectedSessionId()) {
-          workspaceStore.clearSelectedSessionSurface();
-        }
-        return;
-      }
-
-      // If the URL points at a session that no longer exists (e.g. after deletion),
-      // route back to /session so the app can fall back safely.
-      const pendingInitialSelection = pendingInitialSessionSelection();
-      const selectedWorkspaceRoot = normalizeDirectoryPath(workspaceStore.selectedWorkspaceRoot().trim());
-      const matchingSession = sessions().find((session) => session.id === id) ?? null;
-      const hasMatchingSessionInScope = matchingSession
-        ? !selectedWorkspaceRoot || normalizeDirectoryPath(matchingSession.directory) === selectedWorkspaceRoot
-        : false;
-      if (
-        sessionsLoaded() &&
-        !pendingInitialSelection &&
-        shouldRedirectMissingSessionAfterScopedLoad({
-          loadedScopeRoot: loadedSessionScopeRoot(),
-          workspaceRoot: workspaceStore.selectedWorkspaceRoot().trim(),
-          hasMatchingSession: hasMatchingSessionInScope,
-        })
-      ) {
-        if (selectedSessionId() === id) {
-          setSelectedSessionId(null);
-        }
-        navigate("/session", { replace: true });
-        return;
-      }
-
-      if (selectedSessionId() !== id) {
-        setSelectedSessionId(id);
-        void selectSession(id);
-      }
-      return;
-    }
-
-    const fallback = activeSessionId();
-    if (fallback) {
-      goToSession(fallback, { replace: true });
-      return;
-    }
-    navigate("/session", { replace: true });
+  syncShellRoute({
+    pathname: () => location.pathname,
+    navigate,
+    settingsTab,
+    setSettingsTabState,
+    setSelectedSessionId,
+    selectedSessionId,
+    selectSession,
+    pendingInitialSessionSelection,
+    sessions,
+    sessionsLoaded,
+    loadedSessionScopeRoot,
+    selectedWorkspaceRoot: () => workspaceStore.selectedWorkspaceRoot(),
+    clearSelectedSessionSurface: workspaceStore.clearSelectedSessionSurface,
+    activeSessionId,
+    goToSettings,
+    goToSession,
   });
+
+  const renderReactOwnedSurface = (content: () => JSX.Element) => (
+    <SolidContextBridge
+      platform={platform}
+      server={server}
+      globalSDK={globalSDK}
+      globalSync={globalSync}
+      local={local}
+    >
+      <OpenworkServerProvider store={openworkServerStore}>
+        <ModelControlsProvider store={modelControlsStore}>
+          <SessionActionsProvider store={sessionActionsStore}>
+            <ConnectionsProvider store={connectionsStore}>
+              <ExtensionsProvider store={extensionsStore}>
+                <AutomationsProvider store={automationsStore}>
+                  <StatusToastsProvider store={statusToastsStore}>
+                    {content()}
+                  </StatusToastsProvider>
+                </AutomationsProvider>
+              </ExtensionsProvider>
+            </ConnectionsProvider>
+          </SessionActionsProvider>
+        </ModelControlsProvider>
+      </OpenworkServerProvider>
+    </SolidContextBridge>
+  );
 
   return (
     <OpenworkServerProvider store={openworkServerStore}>
@@ -2431,23 +2388,46 @@ export default function App() {
                   <Show when={showReactSessionRuntime()}>
                     <ReactIsland
                       class="hidden"
-                      instanceKey={`react-runtime:${runtimeWorkspaceId()!}`}
+                      instanceKey={`react-runtime:${reactSessionRuntime()!.workspaceId}`}
                       component={ReactSessionRuntime}
                       props={{
-                        workspaceId: runtimeWorkspaceId()!,
-                        opencodeBaseUrl: reactSessionRuntimeBaseUrl(),
-                        openworkToken: reactSessionRuntimeToken(),
+                        workspaceId: reactSessionRuntime()!.workspaceId,
+                        opencodeBaseUrl: reactSessionRuntime()!.opencodeBaseUrl,
+                        openworkToken: reactSessionRuntime()!.openworkToken,
                       }}
                     />
                   </Show>
-            <Switch>
-              <Match when={currentView() === "session"}>
-                <SessionView {...sessionProps()} />
-              </Match>
-              <Match when={true}>
-                <SettingsShell {...settingsShellProps()} />
-              </Match>
-            </Switch>
+                  <ReactShellHost
+                    currentView={currentView()}
+                    renderSession={() =>
+                      renderReactOwnedSurface(() => <SessionView {...sessionProps()} />)
+                    }
+                    renderSettings={() =>
+                      renderReactOwnedSurface(() => <SettingsShell {...settingsShellProps()} />)
+                    }
+                    renderOverlays={() =>
+                      renderReactOwnedSurface(() => (
+                        <TopRightNotifications
+                          reloadOpen={reloadRequired("config", "mcp", "plugin", "skill", "agent", "command")}
+                          reloadTitle={reloadCopy().title}
+                          reloadDescription={reloadCopy().body}
+                          reloadTrigger={reloadTrigger()}
+                          reloadError={reloadError()}
+                          reloadLabel={activeReloadBlockingSessions().length > 0 ? t("app.reload_stop_tasks") : t("app.reload_now")}
+                          dismissLabel={t("app.reload_later")}
+                          reloadBusy={reloadBusy()}
+                          canReload={canReloadWorkspace()}
+                          hasActiveRuns={activeReloadBlockingSessions().length > 0}
+                          onReload={() => {
+                            void (activeReloadBlockingSessions().length > 0
+                              ? forceStopActiveSessionsAndReload()
+                              : reloadWorkspaceEngine());
+                          }}
+                          onDismissReload={clearReloadRequired}
+                        />
+                      ))
+                    }
+                  />
 
       <ModelPickerModal
         open={modelPickerOpen()}
@@ -2682,25 +2662,6 @@ export default function App() {
                 (busyLabel() === "status.creating_workspace" || busyLabel() === "status.connecting")
               }
             />
-
-      <TopRightNotifications
-        reloadOpen={reloadRequired("config", "mcp", "plugin", "skill", "agent", "command")}
-        reloadTitle={reloadCopy().title}
-        reloadDescription={reloadCopy().body}
-        reloadTrigger={reloadTrigger()}
-        reloadError={reloadError()}
-        reloadLabel={activeReloadBlockingSessions().length > 0 ? t("app.reload_stop_tasks") : t("app.reload_now")}
-        dismissLabel={t("app.reload_later")}
-        reloadBusy={reloadBusy()}
-        canReload={canReloadWorkspace()}
-        hasActiveRuns={activeReloadBlockingSessions().length > 0}
-        onReload={() => {
-          void (activeReloadBlockingSessions().length > 0
-            ? forceStopActiveSessionsAndReload()
-            : reloadWorkspaceEngine());
-        }}
-        onDismissReload={clearReloadRequired}
-      />
 
       <RenameWorkspaceModal
         open={workspaceStore.renameWorkspaceOpen()}

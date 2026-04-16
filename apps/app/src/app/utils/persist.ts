@@ -3,101 +3,20 @@ import { createResource, type Accessor } from "solid-js";
 import type { SetStoreFunction, Store } from "solid-js/store";
 
 import { usePlatform, type AsyncStorage, type SyncStorage } from "../context/platform";
+import {
+  Persist,
+  LEGACY_STORAGE,
+  localStorageWithPrefix,
+  mergePersistedValue,
+  parsePersistedValue,
+  snapshot,
+  type PersistTarget,
+} from "./persist-core";
+
+export { Persist, type PersistTarget } from "./persist-core";
 
 type InitType = Promise<string> | string | null;
 type PersistedWithReady<T> = [Store<T>, SetStoreFunction<T>, InitType, Accessor<boolean>];
-
-type PersistTarget = {
-  storage?: string;
-  key: string;
-  legacy?: string[];
-  migrate?: (value: unknown) => unknown;
-};
-
-const LEGACY_STORAGE = "default.dat";
-const GLOBAL_STORAGE = "openwork.global.dat";
-
-function snapshot(value: unknown) {
-  return JSON.parse(JSON.stringify(value)) as unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function merge(defaults: unknown, value: unknown): unknown {
-  if (value === undefined) return defaults;
-  if (value === null) return value;
-
-  if (Array.isArray(defaults)) {
-    if (Array.isArray(value)) return value;
-    return defaults;
-  }
-
-  if (isRecord(defaults)) {
-    if (!isRecord(value)) return defaults;
-
-    const result: Record<string, unknown> = { ...defaults };
-    for (const key of Object.keys(value)) {
-      if (key in defaults) {
-        result[key] = merge((defaults as Record<string, unknown>)[key], (value as Record<string, unknown>)[key]);
-      } else {
-        result[key] = (value as Record<string, unknown>)[key];
-      }
-    }
-    return result;
-  }
-
-  return value;
-}
-
-function parse(value: string) {
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return undefined;
-  }
-}
-
-function checksum(input: string) {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
-
-function workspaceStorage(dir: string) {
-  const head = dir.slice(0, 12) || "workspace";
-  const sum = checksum(dir);
-  return `openwork.workspace.${head}.${sum}.dat`;
-}
-
-function localStorageWithPrefix(prefix: string): SyncStorage {
-  const base = `${prefix}:`;
-  return {
-    getItem: (key) => localStorage.getItem(base + key),
-    setItem: (key, value) => localStorage.setItem(base + key, value),
-    removeItem: (key) => localStorage.removeItem(base + key),
-  };
-}
-
-export const Persist = {
-  global(key: string, legacy?: string[]): PersistTarget {
-    return { storage: GLOBAL_STORAGE, key, legacy };
-  },
-  workspace(dir: string, key: string, legacy?: string[]): PersistTarget {
-    return { storage: workspaceStorage(dir), key: `workspace:${key}`, legacy };
-  },
-  session(dir: string, session: string, key: string, legacy?: string[]): PersistTarget {
-    return { storage: workspaceStorage(dir), key: `session:${session}:${key}`, legacy };
-  },
-  scoped(dir: string, session: string | undefined, key: string, legacy?: string[]): PersistTarget {
-    if (session) return Persist.session(dir, session, key, legacy);
-    return Persist.workspace(dir, key, legacy);
-  },
-};
 
 export function persisted<T>(
   target: string | PersistTarget,
@@ -132,11 +51,11 @@ export function persisted<T>(
         getItem: (key) => {
           const raw = current.getItem(key);
           if (raw !== null) {
-            const parsed = parse(raw);
+            const parsed = parsePersistedValue(raw);
             if (parsed === undefined) return raw;
 
             const migrated = config.migrate ? config.migrate(parsed) : parsed;
-            const merged = merge(defaults, migrated);
+            const merged = mergePersistedValue(defaults, migrated);
             const next = JSON.stringify(merged);
             if (raw !== next) current.setItem(key, next);
             return next;
@@ -149,11 +68,11 @@ export function persisted<T>(
             current.setItem(key, legacyRaw);
             legacyStore.removeItem(legacyKey);
 
-            const parsed = parse(legacyRaw);
+            const parsed = parsePersistedValue(legacyRaw);
             if (parsed === undefined) return legacyRaw;
 
             const migrated = config.migrate ? config.migrate(parsed) : parsed;
-            const merged = merge(defaults, migrated);
+            const merged = mergePersistedValue(defaults, migrated);
             const next = JSON.stringify(merged);
             if (legacyRaw !== next) current.setItem(key, next);
             return next;
@@ -179,11 +98,11 @@ export function persisted<T>(
       getItem: async (key) => {
         const raw = await current.getItem(key);
         if (raw !== null) {
-          const parsed = parse(raw);
+          const parsed = parsePersistedValue(raw);
           if (parsed === undefined) return raw;
 
           const migrated = config.migrate ? config.migrate(parsed) : parsed;
-          const merged = merge(defaults, migrated);
+          const merged = mergePersistedValue(defaults, migrated);
           const next = JSON.stringify(merged);
           if (raw !== next) await current.setItem(key, next);
           return next;
@@ -198,11 +117,11 @@ export function persisted<T>(
           await current.setItem(key, legacyRaw);
           await legacyStore.removeItem(legacyKey);
 
-          const parsed = parse(legacyRaw);
+          const parsed = parsePersistedValue(legacyRaw);
           if (parsed === undefined) return legacyRaw;
 
           const migrated = config.migrate ? config.migrate(parsed) : parsed;
-          const merged = merge(defaults, migrated);
+          const merged = mergePersistedValue(defaults, migrated);
           const next = JSON.stringify(merged);
           if (legacyRaw !== next) await current.setItem(key, next);
           return next;

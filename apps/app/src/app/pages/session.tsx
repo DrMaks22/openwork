@@ -78,7 +78,7 @@ import type {
   OpenworkServerSettings,
   OpenworkServerStatus,
 } from "../lib/openwork-server";
-import { buildOpenworkWorkspaceBaseUrl } from "../lib/openwork-server";
+import { resolveOpenworkSessionRuntime } from "../lib/openwork-session-runtime";
 import { join } from "@tauri-apps/api/path";
 import {
   isUserVisiblePart,
@@ -102,6 +102,9 @@ import { createSessionScrollController } from "../components/session/scroll-cont
 import WorkspaceSessionList from "../components/session/workspace-session-list";
 import FlyoutItem from "../components/flyout-item";
 import QuestionModal from "../components/question-modal";
+import ReactSessionHeaderHost from "../session/react-session-header-host";
+import ReactSessionSidebarShellHost from "../session/react-session-sidebar-shell-host";
+import { useConnections } from "../connections/provider";
 import {
   useStatusToasts,
   type AppStatusToastTone,
@@ -117,6 +120,10 @@ import type { BootPhase, StartupBranch, StartupTraceEvent } from "../lib/startup
 import { ReactIsland } from "../../react/island";
 import { reactSessionEnabled } from "../../react/feature-flag";
 import { SessionSurface } from "../../react/session/session-surface.react";
+import {
+  buildComposerToolMenuMcpItems,
+  toolMenuSectionToSettingsTab,
+} from "../session/composer-tools";
 
 export type SessionViewProps = {
   selectedSessionId: string | null;
@@ -307,6 +314,7 @@ export default function SessionView(props: SessionViewProps) {
   const FLUSH_PROMPT_EVENT = "openwork:flushPromptDraft";
   const { showThinking } = useSessionDisplayPreferences();
   const platform = usePlatform();
+  const connections = useConnections();
   const sessionActions = useSessionActions();
   const modelControls = useModelControls();
   const statusToasts = useStatusToasts();
@@ -2136,25 +2144,25 @@ export default function SessionView(props: SessionViewProps) {
     workspaceId: string;
     sessionId: string;
   } | null>(null);
-  const reactSessionOpencodeBaseUrl = createMemo(() => {
-    const workspaceId = props.runtimeWorkspaceId?.trim() ?? "";
-    const baseUrl = props.openworkServerClient?.baseUrl?.trim() ?? "";
-    if (!workspaceId || !baseUrl) return "";
-    const mounted = buildOpenworkWorkspaceBaseUrl(baseUrl, workspaceId) ?? baseUrl;
-    return `${mounted.replace(/\/+$/, "")}/opencode`;
-  });
-  const reactSessionToken = createMemo(
-    () => props.openworkServerClient?.token?.trim() || props.openworkServerSettings.token?.trim() || "",
+  const reactSessionRuntime = createMemo(() =>
+    resolveOpenworkSessionRuntime({
+      workspaceId: props.runtimeWorkspaceId,
+      client: props.openworkServerClient,
+      settings: props.openworkServerSettings,
+    }),
+  );
+  const composerToolMcpItems = createMemo(() =>
+    buildComposerToolMenuMcpItems(
+      connections.mcpServers(),
+      connections.mcpStatuses(),
+    ),
   );
   const showReactSessionSurface = createMemo(
     () =>
       reactSessionEnabled() &&
       Boolean(
         props.selectedSessionId?.trim() &&
-          props.runtimeWorkspaceId?.trim() &&
-          props.openworkServerClient &&
-          reactSessionOpencodeBaseUrl() &&
-          reactSessionToken(),
+          reactSessionRuntime(),
       ),
   );
   const hasWorkspaceConfigured = createMemo(() => props.workspaces.length > 0);
@@ -2958,229 +2966,272 @@ export default function SessionView(props: SessionViewProps) {
     }
     applyStarterPrompt(starter.prompt);
   };
+  const renderWorkspaceSidebar = () => (
+    <WorkspaceSessionList
+      workspaceSessionGroups={props.workspaceSessionGroups}
+      selectedWorkspaceId={props.selectedWorkspaceId}
+      developerMode={props.developerMode}
+      selectedSessionId={props.selectedSessionId}
+      showInitialLoading={showSidebarInitialLoading()}
+      showSessionActions
+      sessionStatusById={props.sessionStatusById}
+      connectingWorkspaceId={props.connectingWorkspaceId}
+      workspaceConnectionStateById={props.workspaceConnectionStateById}
+      newTaskDisabled={props.newTaskDisabled}
+      onSelectWorkspace={props.selectWorkspace}
+      onOpenSession={openSessionFromList}
+      onPrefetchSession={(workspaceId, sessionId) => {
+        if (workspaceId !== props.selectedWorkspaceId) return;
+        void props.ensureSessionLoaded(sessionId);
+      }}
+      onCreateTaskInWorkspace={createTaskInWorkspace}
+      onOpenRenameSession={openRenameModal}
+      onOpenDeleteSession={openDeleteSessionModal}
+      onOpenRenameWorkspace={props.openRenameWorkspace}
+      onShareWorkspace={shareWorkspaceState.openShareWorkspace}
+      onRevealWorkspace={revealWorkspaceInFinder}
+      onRecoverWorkspace={props.recoverWorkspace}
+      onTestWorkspaceConnection={props.testWorkspaceConnection}
+      onEditWorkspaceConnection={props.editWorkspaceConnection}
+      onForgetWorkspace={props.forgetWorkspace}
+      onOpenCreateWorkspace={props.openCreateWorkspace}
+    />
+  );
+  const renderHeaderActions = () => (
+    <div class="flex items-center gap-1.5 text-gray-10">
+      <button
+        type="button"
+        class={`hidden items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors sm:flex ${
+          commandPaletteOpen()
+            ? "bg-gray-2 text-dls-text"
+            : "text-gray-10 hover:bg-gray-2/70 hover:text-dls-text"
+        }`}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (commandPaletteOpen()) {
+            closeCommandPalette();
+            return;
+          }
+          window.setTimeout(() => openCommandPalette(), 0);
+        }}
+        title={t("session.quick_actions_title")}
+        aria-label={t("session.quick_actions_label")}
+      >
+        <Menu size={15} />
+        <span>{t("session.menu_label")}</span>
+        <span class="ml-1 rounded border border-dls-border px-1 text-[10px] text-gray-9">
+          ⌘K
+        </span>
+      </button>
+      <button
+        type="button"
+        class={`flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
+          searchOpen()
+            ? "bg-gray-2 text-dls-text"
+            : "text-gray-10 hover:bg-gray-2/70 hover:text-dls-text"
+        }`}
+        onClick={() => {
+          if (searchOpen()) {
+            closeSearch();
+            return;
+          }
+          openSearch();
+        }}
+        title={t("session.search_conversation_title")}
+        aria-label={t("session.search_conversation_label")}
+      >
+        <Search size={16} />
+      </button>
+      <div class="hidden h-4 w-px bg-dls-border sm:block" />
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={undoLastMessage}
+        disabled={!canUndoLastMessage() || historyActionBusy() !== null}
+        title={t("session.undo_title")}
+        aria-label={t("session.undo_label")}
+      >
+        <Show
+          when={historyActionBusy() === "undo"}
+          fallback={<Undo2 size={16} />}
+        >
+          <Loader2 size={16} class="animate-spin" />
+        </Show>
+        <span class="hidden lg:inline">{t("session.revert_label")}</span>
+      </button>
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={redoLastMessage}
+        disabled={!canRedoLastMessage() || historyActionBusy() !== null}
+        title={t("session.redo_title")}
+        aria-label={t("session.redo_aria_label")}
+      >
+        <Show
+          when={historyActionBusy() === "redo"}
+          fallback={<Redo2 size={16} />}
+        >
+          <Loader2 size={16} class="animate-spin" />
+        </Show>
+        <span class="hidden lg:inline">{t("session.redo_label")}</span>
+      </button>
+    </div>
+  );
   return (
     <div class="h-[100dvh] min-h-screen w-full overflow-hidden bg-[var(--dls-app-bg)] p-3 md:p-4 text-gray-12 font-sans">
       <div class="flex h-full w-full gap-3 md:gap-4">
-        <aside
-          class="relative hidden lg:flex shrink-0 flex-col overflow-hidden rounded-[24px] border border-dls-border bg-dls-sidebar p-2.5"
-          style={{
-            width: `${leftSidebarWidth()}px`,
-            "min-width": `${leftSidebarWidth()}px`,
-          }}
-        >
-          <div class="shrink-0">
-            <Show when={showUpdatePill()}>
-              <button
-                type="button"
-                class={`group relative mb-3 flex w-full items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.2)] ${updatePillBorderTone()} ${updatePillButtonTone()}`}
-                onClick={handleUpdatePillClick}
-                title={updatePillTitle()}
-                aria-label={updatePillTitle()}
-              >
-                <Show
-                  when={props.updateStatus?.state === "downloading"}
-                  fallback={
-                    <ArrowDownToLine
-                      size={12}
-                      class={`${updatePillDotTone()} shrink-0 ${props.updateStatus?.state === "available" ? "animate-pulse" : ""}`}
-                      style={props.updateStatus?.state === "available" ? { "animation-duration": "3.5s" } : undefined}
-                    />
-                  }
-                >
-                  <Loader2
-                    size={13}
-                    class={`animate-spin shrink-0 ${updatePillDotTone()}`}
-                  />
-                </Show>
-                <span class="min-w-0 flex-1 truncate whitespace-nowrap text-left">{updatePillLabel()}</span>
-                <Show when={props.updateStatus?.version}>
-                  {(version) => (
-                    <span
-                      class={`ml-auto shrink-0 font-mono text-[10px] ${updatePillVersionTone()}`}
-                    >
-                      v{version()}
-                    </span>
-                  )}
-                </Show>
-              </button>
-            </Show>
-          </div>
-          <div class="flex min-h-0 flex-1">
-            <WorkspaceSessionList
-              workspaceSessionGroups={props.workspaceSessionGroups}
-              selectedWorkspaceId={props.selectedWorkspaceId}
-              developerMode={props.developerMode}
-              selectedSessionId={props.selectedSessionId}
-              showInitialLoading={showSidebarInitialLoading()}
-              showSessionActions
-              sessionStatusById={props.sessionStatusById}
-              connectingWorkspaceId={props.connectingWorkspaceId}
-              workspaceConnectionStateById={props.workspaceConnectionStateById}
-              newTaskDisabled={props.newTaskDisabled}
-              onSelectWorkspace={props.selectWorkspace}
-              onOpenSession={openSessionFromList}
-              onPrefetchSession={(workspaceId, sessionId) => {
-                if (workspaceId !== props.selectedWorkspaceId) return;
-                void props.ensureSessionLoaded(sessionId);
+        <Show
+          when={showReactSessionSurface()}
+          fallback={
+            <aside
+              class="relative hidden lg:flex shrink-0 flex-col overflow-hidden rounded-[24px] border border-dls-border bg-dls-sidebar p-2.5"
+              style={{
+                width: `${leftSidebarWidth()}px`,
+                "min-width": `${leftSidebarWidth()}px`,
               }}
-              onCreateTaskInWorkspace={createTaskInWorkspace}
-              onOpenRenameSession={openRenameModal}
-              onOpenDeleteSession={openDeleteSessionModal}
-              onOpenRenameWorkspace={props.openRenameWorkspace}
-              onShareWorkspace={shareWorkspaceState.openShareWorkspace}
-              onRevealWorkspace={revealWorkspaceInFinder}
-              onRecoverWorkspace={props.recoverWorkspace}
-              onTestWorkspaceConnection={props.testWorkspaceConnection}
-              onEditWorkspaceConnection={props.editWorkspaceConnection}
-              onForgetWorkspace={props.forgetWorkspace}
-              onOpenCreateWorkspace={props.openCreateWorkspace}
-            />
-          </div>
-          <div
-            class="absolute right-0 top-3 hidden h-[calc(100%-24px)] w-2 translate-x-1/2 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-gray-6/40 lg:block"
-            onPointerDown={startLeftSidebarResize}
-            title={t("session.resize_workspace_column")}
-            aria-label={t("session.resize_workspace_column")}
+            >
+              <div class="shrink-0">
+                <Show when={showUpdatePill()}>
+                  <button
+                    type="button"
+                    class={`group relative mb-3 flex w-full items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.2)] ${updatePillBorderTone()} ${updatePillButtonTone()}`}
+                    onClick={handleUpdatePillClick}
+                    title={updatePillTitle()}
+                    aria-label={updatePillTitle()}
+                  >
+                    <Show
+                      when={props.updateStatus?.state === "downloading"}
+                      fallback={
+                        <ArrowDownToLine
+                          size={12}
+                          class={`${updatePillDotTone()} shrink-0 ${props.updateStatus?.state === "available" ? "animate-pulse" : ""}`}
+                          style={props.updateStatus?.state === "available" ? { "animation-duration": "3.5s" } : undefined}
+                        />
+                      }
+                    >
+                      <Loader2
+                        size={13}
+                        class={`animate-spin shrink-0 ${updatePillDotTone()}`}
+                      />
+                    </Show>
+                    <span class="min-w-0 flex-1 truncate whitespace-nowrap text-left">{updatePillLabel()}</span>
+                    <Show when={props.updateStatus?.version}>
+                      {(version) => (
+                        <span
+                          class={`ml-auto shrink-0 font-mono text-[10px] ${updatePillVersionTone()}`}
+                        >
+                          v{version()}
+                        </span>
+                      )}
+                    </Show>
+                  </button>
+                </Show>
+              </div>
+              <div class="flex min-h-0 flex-1">{renderWorkspaceSidebar()}</div>
+              <div
+                class="absolute right-0 top-3 hidden h-[calc(100%-24px)] w-2 translate-x-1/2 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-gray-6/40 lg:block"
+                onPointerDown={startLeftSidebarResize}
+                title={t("session.resize_workspace_column")}
+                aria-label={t("session.resize_workspace_column")}
+              />
+            </aside>
+          }
+        >
+          <ReactSessionSidebarShellHost
+            leftSidebarWidth={leftSidebarWidth()}
+            showUpdatePill={showUpdatePill()}
+            updatePillLabel={updatePillLabel()}
+            updatePillTitle={updatePillTitle()}
+            updateVersion={props.updateStatus?.version}
+            onUpdatePillClick={handleUpdatePillClick}
+            onStartResize={startLeftSidebarResize}
+            renderSidebar={renderWorkspaceSidebar}
           />
-        </aside>
+        </Show>
 
         <main class="min-w-0 flex-1 flex flex-col overflow-hidden rounded-[24px] border border-dls-border bg-dls-surface shadow-[var(--dls-shell-shadow)]">
-          <header class="z-10 flex h-12 shrink-0 items-center justify-between border-b border-dls-border bg-dls-surface px-4 md:px-6">
-            <div class="flex min-w-0 items-center gap-3">
-              <Show when={showUpdatePill()}>
-                <button
-                  type="button"
-                  class={`md:hidden flex items-center gap-1.5 rounded-full border bg-dls-surface px-2.5 py-1 text-xs font-medium shadow-sm transition-colors active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.2)] ${updatePillBorderTone()} ${updatePillButtonTone()}`}
-                  onClick={handleUpdatePillClick}
-                  title={updatePillTitle()}
-                  aria-label={updatePillTitle()}
-                >
-                  <Show
-                    when={props.updateStatus?.state === "downloading"}
-                    fallback={
-                      <ArrowDownToLine
-                        size={12}
-                        class={`${updatePillDotTone()} shrink-0 ${props.updateStatus?.state === "available" ? "animate-pulse" : ""}`}
-                        style={props.updateStatus?.state === "available" ? { "animation-duration": "3.5s" } : undefined}
-                      />
-                    }
-                  >
-                    <Loader2
-                      size={13}
-                      class={`animate-spin shrink-0 ${updatePillDotTone()}`}
-                    />
-                  </Show>
-                  <span class="text-[11px]">{updatePillLabel()}</span>
-                  <Show when={props.updateStatus?.version}>
-                    {(version) => (
-                      <span
-                        class={`hidden sm:inline font-mono text-[10px] ${updatePillVersionTone()}`}
+          <Show
+            when={showReactSessionSurface()}
+            fallback={
+              <header class="z-10 flex h-12 shrink-0 items-center justify-between border-b border-dls-border bg-dls-surface px-4 md:px-6">
+                <div class="flex min-w-0 items-center gap-3">
+                  <Show when={showUpdatePill()}>
+                    <button
+                      type="button"
+                      class={`md:hidden flex items-center gap-1.5 rounded-full border bg-dls-surface px-2.5 py-1 text-xs font-medium shadow-sm transition-colors active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.2)] ${updatePillBorderTone()} ${updatePillButtonTone()}`}
+                      onClick={handleUpdatePillClick}
+                      title={updatePillTitle()}
+                      aria-label={updatePillTitle()}
+                    >
+                      <Show
+                        when={props.updateStatus?.state === "downloading"}
+                        fallback={
+                          <ArrowDownToLine
+                            size={12}
+                            class={`${updatePillDotTone()} shrink-0 ${props.updateStatus?.state === "available" ? "animate-pulse" : ""}`}
+                            style={props.updateStatus?.state === "available" ? { "animation-duration": "3.5s" } : undefined}
+                          />
+                        }
                       >
-                        v{version()}
-                      </span>
-                    )}
+                        <Loader2
+                          size={13}
+                          class={`animate-spin shrink-0 ${updatePillDotTone()}`}
+                        />
+                      </Show>
+                      <span class="text-[11px]">{updatePillLabel()}</span>
+                      <Show when={props.updateStatus?.version}>
+                        {(version) => (
+                          <span
+                            class={`hidden sm:inline font-mono text-[10px] ${updatePillVersionTone()}`}
+                          >
+                            v{version()}
+                          </span>
+                        )}
+                      </Show>
+                    </button>
                   </Show>
-                </button>
-              </Show>
 
-              <h1 class="truncate text-[15px] font-semibold text-dls-text">
-                {sessionHeaderTitle()}
-              </h1>
-              <span class="hidden truncate text-[13px] text-dls-secondary lg:inline">
-                {props.selectedWorkspaceDisplay.displayName || props.selectedWorkspaceDisplay.name || t("session.workspace_fallback")}
-              </span>
-              <Show when={props.developerMode}>
-                <span class="hidden text-[12px] text-dls-secondary lg:inline">
-                  {props.headerStatus}
-                </span>
-              </Show>
-              <Show when={props.busyHint}>
-                <span class="hidden text-[12px] text-dls-secondary lg:inline">
-                  {props.busyHint}
-                </span>
-              </Show>
-            </div>
-
-            <div class="flex items-center gap-1.5 text-gray-10">
-              <button
-                type="button"
-                class={`hidden items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors sm:flex ${
-                  commandPaletteOpen()
-                    ? "bg-gray-2 text-dls-text"
-                    : "text-gray-10 hover:bg-gray-2/70 hover:text-dls-text"
-                }`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (commandPaletteOpen()) {
-                    closeCommandPalette();
-                    return;
-                  }
-                  window.setTimeout(() => openCommandPalette(), 0);
-                }}
-                title={t("session.quick_actions_title")}
-                aria-label={t("session.quick_actions_label")}
-              >
-                <Menu size={15} />
-                <span>{t("session.menu_label")}</span>
-                <span class="ml-1 rounded border border-dls-border px-1 text-[10px] text-gray-9">
-                  ⌘K
-                </span>
-              </button>
-              <button
-                type="button"
-                class={`flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
-                  searchOpen()
-                    ? "bg-gray-2 text-dls-text"
-                    : "text-gray-10 hover:bg-gray-2/70 hover:text-dls-text"
-                }`}
-                onClick={() => {
-                  if (searchOpen()) {
-                    closeSearch();
-                    return;
-                  }
-                  openSearch();
-                }}
-                title={t("session.search_conversation_title")}
-                aria-label={t("session.search_conversation_label")}
-              >
-                <Search size={16} />
-              </button>
-              <div class="hidden h-4 w-px bg-dls-border sm:block" />
-              <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={undoLastMessage}
-                disabled={!canUndoLastMessage() || historyActionBusy() !== null}
-                title={t("session.undo_title")}
-                aria-label={t("session.undo_label")}
-              >
-                <Show
-                  when={historyActionBusy() === "undo"}
-                  fallback={<Undo2 size={16} />}
-                >
-                  <Loader2 size={16} class="animate-spin" />
-                </Show>
-                <span class="hidden lg:inline">{t("session.revert_label")}</span>
-              </button>
-              <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={redoLastMessage}
-                disabled={!canRedoLastMessage() || historyActionBusy() !== null}
-                title={t("session.redo_title")}
-                aria-label={t("session.redo_aria_label")}
-              >
-                <Show
-                  when={historyActionBusy() === "redo"}
-                  fallback={<Redo2 size={16} />}
-                >
-                  <Loader2 size={16} class="animate-spin" />
-                </Show>
-                <span class="hidden lg:inline">{t("session.redo_label")}</span>
-              </button>
-            </div>
-          </header>
+                  <h1 class="truncate text-[15px] font-semibold text-dls-text">
+                    {sessionHeaderTitle()}
+                  </h1>
+                  <span class="hidden truncate text-[13px] text-dls-secondary lg:inline">
+                    {props.selectedWorkspaceDisplay.displayName || props.selectedWorkspaceDisplay.name || t("session.workspace_fallback")}
+                  </span>
+                  <Show when={props.developerMode}>
+                    <span class="hidden text-[12px] text-dls-secondary lg:inline">
+                      {props.headerStatus}
+                    </span>
+                  </Show>
+                  <Show when={props.busyHint}>
+                    <span class="hidden text-[12px] text-dls-secondary lg:inline">
+                      {props.busyHint}
+                    </span>
+                  </Show>
+                </div>
+                {renderHeaderActions()}
+              </header>
+            }
+          >
+            <ReactSessionHeaderHost
+              title={sessionHeaderTitle()}
+              workspaceLabel={
+                props.selectedWorkspaceDisplay.displayName ||
+                props.selectedWorkspaceDisplay.name ||
+                t("session.workspace_fallback")
+              }
+              developerMode={props.developerMode}
+              headerStatus={props.headerStatus}
+              busyHint={props.busyHint}
+              showUpdatePill={showUpdatePill()}
+              updatePillLabel={updatePillLabel()}
+              updatePillTitle={updatePillTitle()}
+              updateVersion={props.updateStatus?.version}
+              onUpdatePillClick={handleUpdatePillClick}
+              onOpenSettings={props.toggleSettings}
+              renderActions={renderHeaderActions}
+            />
+          </Show>
 
           <Show when={searchOpen()}>
             <div class="border-b border-dls-border bg-dls-sidebar/70 px-4 py-2 md:px-6">
@@ -3374,10 +3425,10 @@ export default function SessionView(props: SessionViewProps) {
                           component={SessionSurface}
                           props={{
                             client: props.openworkServerClient!,
-                            workspaceId: props.runtimeWorkspaceId!,
+                            workspaceId: reactSessionRuntime()!.workspaceId,
                             sessionId: props.selectedSessionId!,
-                            opencodeBaseUrl: reactSessionOpencodeBaseUrl(),
-                            openworkToken: reactSessionToken(),
+                            opencodeBaseUrl: reactSessionRuntime()!.opencodeBaseUrl,
+                            openworkToken: reactSessionRuntime()!.openworkToken,
                             developerMode: props.developerMode,
                             modelLabel: modelControls.selectedSessionModelLabel() || t("session.model_fallback"),
                             onModelClick: () => modelControls.openSessionModelPicker(),
@@ -3396,10 +3447,22 @@ export default function SessionView(props: SessionViewProps) {
                               void applySessionAgent(agent);
                             },
                             listCommands: sessionActions.listCommands,
+                            skills: props.skills,
+                            mcpItems: composerToolMcpItems(),
+                            mcpStatusText: connections.mcpStatus() ?? "Configured MCP servers",
+                            onOpenSettings: (section) => {
+                              openSettings(toolMenuSectionToSettingsTab(section));
+                            },
                             recentFiles: props.workingFiles,
                             searchFiles: sessionActions.searchWorkspaceFiles,
                             isRemoteWorkspace: props.selectedWorkspaceDisplay.workspaceType === "remote",
                             isSandboxWorkspace: isSandboxWorkspace(),
+                            hasEarlierMessages:
+                              hiddenMessageCount() > 0 || hasServerEarlierMessages(),
+                            loadingEarlierMessages: props.loadingEarlierMessages,
+                            onLoadEarlierMessages: () => {
+                              void revealEarlierMessages();
+                            },
                             onUploadInboxFiles: uploadInboxFiles,
                           }}
                         />

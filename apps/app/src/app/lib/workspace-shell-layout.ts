@@ -1,83 +1,22 @@
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
-
-const LEFT_SIDEBAR_WIDTH_KEY = "openwork.workspace-shell.left-width.v1";
-const RIGHT_SIDEBAR_EXPANDED_KEY = "openwork.workspace-shell.right-expanded.v3";
-
-export const DEFAULT_WORKSPACE_LEFT_SIDEBAR_WIDTH = 260;
-export const MIN_WORKSPACE_LEFT_SIDEBAR_WIDTH = 220;
-export const MAX_WORKSPACE_LEFT_SIDEBAR_WIDTH = 420;
-export const DEFAULT_WORKSPACE_RIGHT_SIDEBAR_COLLAPSED_WIDTH = 72;
-
-type WorkspaceShellLayoutOptions = {
-  defaultLeftWidth?: number;
-  minLeftWidth?: number;
-  maxLeftWidth?: number;
-  collapsedRightWidth?: number;
-  expandedRightWidth: number;
-};
-
-function readStorage(key: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeStorage(key: string, value: string) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // ignore persistence failures
-  }
-}
-
-function clampNumber(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
+import {
+  createWorkspaceShellLayoutStore,
+  clampWorkspaceShellLeftWidth,
+  type WorkspaceShellLayoutOptions,
+} from "./workspace-shell-layout-store";
 
 export function createWorkspaceShellLayout(options: WorkspaceShellLayoutOptions) {
-  const minLeftWidth = Math.max(180, options.minLeftWidth ?? MIN_WORKSPACE_LEFT_SIDEBAR_WIDTH);
-  const maxLeftWidth = Math.max(minLeftWidth, options.maxLeftWidth ?? MAX_WORKSPACE_LEFT_SIDEBAR_WIDTH);
-  const defaultLeftWidth = clampNumber(
-    options.defaultLeftWidth ?? DEFAULT_WORKSPACE_LEFT_SIDEBAR_WIDTH,
-    minLeftWidth,
-    maxLeftWidth,
+  const store = createWorkspaceShellLayoutStore(options);
+  const snapshot = store.getSnapshot();
+  const [leftSidebarWidth, setLeftSidebarWidth] = createSignal(snapshot.leftSidebarWidth);
+  const [rightSidebarExpanded, setRightSidebarExpandedState] = createSignal(
+    snapshot.rightSidebarExpanded,
   );
-  const collapsedRightWidth = Math.max(
-    56,
-    options.collapsedRightWidth ?? DEFAULT_WORKSPACE_RIGHT_SIDEBAR_COLLAPSED_WIDTH,
-  );
-  const expandedRightWidth = Math.max(collapsedRightWidth, options.expandedRightWidth);
-
-  const readLeftSidebarWidth = () => {
-    const raw = readStorage(LEFT_SIDEBAR_WIDTH_KEY);
-    const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) return defaultLeftWidth;
-    return clampNumber(parsed, minLeftWidth, maxLeftWidth);
-  };
-
-  const readRightSidebarExpanded = () => {
-    const raw = readStorage(RIGHT_SIDEBAR_EXPANDED_KEY);
-    if (raw == null) return false;
-    return raw === "1";
-  };
-
-  const [leftSidebarWidth, setLeftSidebarWidth] = createSignal(readLeftSidebarWidth());
-  const [rightSidebarExpanded, setRightSidebarExpanded] = createSignal(readRightSidebarExpanded());
-
-  createEffect(() => {
-    writeStorage(LEFT_SIDEBAR_WIDTH_KEY, String(clampNumber(leftSidebarWidth(), minLeftWidth, maxLeftWidth)));
-  });
-
-  createEffect(() => {
-    writeStorage(RIGHT_SIDEBAR_EXPANDED_KEY, rightSidebarExpanded() ? "1" : "0");
-  });
 
   const rightSidebarWidth = createMemo(() =>
-    rightSidebarExpanded() ? expandedRightWidth : collapsedRightWidth,
+    rightSidebarExpanded()
+      ? store.getSnapshot().expandedRightWidth
+      : store.getSnapshot().collapsedRightWidth,
   );
 
   let dragCleanup: (() => void) | null = null;
@@ -99,7 +38,13 @@ export function createWorkspaceShellLayout(options: WorkspaceShellLayoutOptions)
 
     const handleMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - initialX;
-      setLeftSidebarWidth(clampNumber(initialWidth + delta, minLeftWidth, maxLeftWidth));
+      store.setLeftSidebarWidth(
+        clampWorkspaceShellLeftWidth(
+          initialWidth + delta,
+          store.getSnapshot().minLeftWidth,
+          store.getSnapshot().maxLeftWidth,
+        ),
+      );
     };
 
     const handleStop = () => {
@@ -124,11 +69,25 @@ export function createWorkspaceShellLayout(options: WorkspaceShellLayoutOptions)
   };
 
   const toggleRightSidebar = () => {
-    setRightSidebarExpanded((current) => !current);
+    store.toggleRightSidebar();
+  };
+
+  const setRightSidebarExpanded = (value: boolean | ((current: boolean) => boolean)) => {
+    const current = store.getSnapshot().rightSidebarExpanded;
+    const next = typeof value === "function" ? value(current) : value;
+    store.setRightSidebarExpanded(next);
   };
 
   onCleanup(() => {
     stopLeftSidebarResize();
+  });
+
+  createEffect(() => {
+    const unsubscribe = store.subscribe((next) => {
+      setLeftSidebarWidth(() => next.leftSidebarWidth);
+      setRightSidebarExpandedState(() => next.rightSidebarExpanded);
+    });
+    onCleanup(unsubscribe);
   });
 
   return {

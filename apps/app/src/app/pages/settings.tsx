@@ -40,7 +40,6 @@ import {
   Copy,
   Cpu,
   Download,
-  FolderOpen,
   HardDrive,
   LifeBuoy,
   MessageCircle,
@@ -86,7 +85,12 @@ import {
   pickFile,
   sandboxDebugProbe,
 } from "../lib/tauri";
-import { LANGUAGE_OPTIONS, t, type Language } from "../../i18n";
+import { ReactIsland } from "../../react/island";
+import AppearanceSettings from "../../react/settings/appearance-settings.react";
+import LegacySettingsScreen from "../../react/settings/legacy-settings-screen.react";
+import RecoverySettings from "../../react/settings/recovery-settings.react";
+import UpdatesSettings from "../../react/settings/updates-settings.react";
+import { t, type Language } from "../../i18n";
 
 export type SettingsViewProps = {
   startupPreference: StartupPreference | null;
@@ -1478,7 +1482,12 @@ export default function SettingsView(props: SettingsViewProps) {
 
         <Switch>
         <Match when={activeTab() === "general"}>
-          <div class="space-y-6">
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-general-screen",
+              renderContent: () => (
+                <div class="space-y-6">
             <AuthorizedFoldersPanel
               openworkServerClient={props.openworkServerClient}
               openworkServerStatus={props.openworkServerStatus}
@@ -1736,192 +1745,161 @@ export default function SettingsView(props: SettingsViewProps) {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
+                </div>
+                </div>
+              ),
+            }}
+            instanceKey={`general:${props.providerConnectedIds.join(",")}:${props.themeMode}:${props.language}`}
+          />
         </Match>
 
         <Match when={activeTab() === "automations"}>
-          <WebUnavailableSurface unavailable={webDeployment()}>
-            <AutomationsView
-              busy={props.busy}
-              selectedWorkspaceRoot={props.selectedWorkspaceRoot}
-              createSessionAndOpen={props.createSessionAndOpen}
-              newTaskDisabled={props.newTaskDisabled}
-              schedulerInstalled={props.schedulerPluginInstalled}
-              canEditPlugins={props.canEditPlugins}
-              addPlugin={props.addPlugin}
-              reloadWorkspaceEngine={props.reloadWorkspaceEngine}
-              reloadBusy={props.reloadBusy}
-              canReloadWorkspace={props.canReloadWorkspace}
-              showHeader={false}
-            />
-          </WebUnavailableSurface>
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-automations-screen",
+              renderContent: () => (
+                <WebUnavailableSurface unavailable={webDeployment()}>
+                  <AutomationsView
+                    busy={props.busy}
+                    selectedWorkspaceRoot={props.selectedWorkspaceRoot}
+                    createSessionAndOpen={props.createSessionAndOpen}
+                    newTaskDisabled={props.newTaskDisabled}
+                    schedulerInstalled={props.schedulerPluginInstalled}
+                    canEditPlugins={props.canEditPlugins}
+                    addPlugin={props.addPlugin}
+                    reloadWorkspaceEngine={props.reloadWorkspaceEngine}
+                    reloadBusy={props.reloadBusy}
+                    canReloadWorkspace={props.canReloadWorkspace}
+                    showHeader={false}
+                  />
+                </WebUnavailableSurface>
+              ),
+            }}
+            instanceKey={`automations:${webDeployment() ? "web" : "desktop"}`}
+          />
         </Match>
 
         <Match when={activeTab() === "skills"}>
-          <WebUnavailableSurface unavailable={webDeployment()}>
-            <SkillsView
-              workspaceName={props.selectedWorkspaceRoot.trim() || t("settings.workspace_fallback_name")}
-              busy={props.busy}
-              canInstallSkillCreator={props.canInstallSkillCreator}
-              canUseDesktopTools={props.canUseDesktopTools}
-              accessHint={props.skillsAccessHint}
-              createSessionAndOpen={props.createSessionAndOpen}
-              showHeader={false}
-            />
-          </WebUnavailableSurface>
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-skills-screen",
+              renderContent: () => (
+                <WebUnavailableSurface unavailable={webDeployment()}>
+                  <SkillsView
+                    workspaceName={props.selectedWorkspaceRoot.trim() || t("settings.workspace_fallback_name")}
+                    busy={props.busy}
+                    canInstallSkillCreator={props.canInstallSkillCreator}
+                    canUseDesktopTools={props.canUseDesktopTools}
+                    accessHint={props.skillsAccessHint}
+                    createSessionAndOpen={props.createSessionAndOpen}
+                    showHeader={false}
+                  />
+                </WebUnavailableSurface>
+              ),
+            }}
+            instanceKey={`skills:${webDeployment() ? "web" : "desktop"}:${props.selectedWorkspaceRoot.trim()}`}
+          />
         </Match>
 
         <Match when={activeTab() === "extensions"}>
-          <WebUnavailableSurface unavailable={webDeployment()}>
-            <ExtensionsView
-              busy={props.busy}
-              selectedWorkspaceRoot={props.selectedWorkspaceRoot}
-              isRemoteWorkspace={props.activeWorkspaceType === "remote"}
-              canEditPlugins={props.canEditPlugins}
-              canUseGlobalScope={props.canUseGlobalPluginScope}
-              accessHint={props.pluginsAccessHint}
-              suggestedPlugins={props.suggestedPlugins}
-              showHeader={false}
-            />
-          </WebUnavailableSurface>
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-extensions-screen",
+              renderContent: () => (
+                <WebUnavailableSurface unavailable={webDeployment()}>
+                  <ExtensionsView
+                    busy={props.busy}
+                    selectedWorkspaceRoot={props.selectedWorkspaceRoot}
+                    isRemoteWorkspace={props.activeWorkspaceType === "remote"}
+                    canEditPlugins={props.canEditPlugins}
+                    canUseGlobalScope={props.canUseGlobalPluginScope}
+                    accessHint={props.pluginsAccessHint}
+                    suggestedPlugins={props.suggestedPlugins}
+                    showHeader={false}
+                  />
+                </WebUnavailableSurface>
+              ),
+            }}
+            instanceKey={`extensions:${webDeployment() ? "web" : "desktop"}:${props.activeWorkspaceType}`}
+          />
         </Match>
 
         <Match when={activeTab() === "messaging"}>
-          <WebUnavailableSurface unavailable={webDeployment()}>
-            <IdentitiesView
-              busy={props.busy}
-              openworkServerStatus={props.openworkServerStatus}
-              openworkServerUrl={props.openworkServerUrl}
-              openworkServerClient={props.openworkServerClient}
-              openworkReconnectBusy={props.openworkReconnectBusy}
-              reconnectOpenworkServer={props.reconnectOpenworkServer}
-              restartLocalServer={props.restartLocalServer}
-              runtimeWorkspaceId={props.runtimeWorkspaceId}
-              selectedWorkspaceRoot={props.selectedWorkspaceRoot}
-              developerMode={props.developerMode}
-              showHeader={false}
-            />
-          </WebUnavailableSurface>
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-messaging-screen",
+              renderContent: () => (
+                <WebUnavailableSurface unavailable={webDeployment()}>
+                  <IdentitiesView
+                    busy={props.busy}
+                    openworkServerStatus={props.openworkServerStatus}
+                    openworkServerUrl={props.openworkServerUrl}
+                    openworkServerClient={props.openworkServerClient}
+                    openworkReconnectBusy={props.openworkReconnectBusy}
+                    reconnectOpenworkServer={props.reconnectOpenworkServer}
+                    restartLocalServer={props.restartLocalServer}
+                    runtimeWorkspaceId={props.runtimeWorkspaceId}
+                    selectedWorkspaceRoot={props.selectedWorkspaceRoot}
+                    developerMode={props.developerMode}
+                    showHeader={false}
+                  />
+                </WebUnavailableSurface>
+              ),
+            }}
+            instanceKey={`messaging:${webDeployment() ? "web" : "desktop"}:${props.openworkServerStatus}`}
+          />
         </Match>
 
         <Match when={activeTab() === "appearance"}>
-          <div class="space-y-6">
-              <div class={`${settingsPanelClass} space-y-4`}>
-                <div>
-                  <div class="text-sm font-medium text-gray-12">{t("settings.appearance_title")}</div>
-                <div class="text-xs text-gray-9">
-                  {t("settings.appearance_hint")}
-                </div>
-              </div>
-
-              <div class="flex flex-wrap gap-2">
-                <Button
-                  variant={
-                    props.themeMode === "system" ? "secondary" : "outline"
-                  }
-                  class="text-xs h-8 py-0 px-3"
-                  onClick={() => props.setThemeMode("system")}
-                  disabled={props.busy}
-                >
-                  {t("settings.theme_system")}
-                </Button>
-                <Button
-                  variant={
-                    props.themeMode === "light" ? "secondary" : "outline"
-                  }
-                  class="text-xs h-8 py-0 px-3"
-                  onClick={() => props.setThemeMode("light")}
-                  disabled={props.busy}
-                >
-                  {t("settings.theme_light")}
-                </Button>
-                <Button
-                  variant={props.themeMode === "dark" ? "secondary" : "outline"}
-                  class="text-xs h-8 py-0 px-3"
-                  onClick={() => props.setThemeMode("dark")}
-                  disabled={props.busy}
-                >
-                  {t("settings.theme_dark")}
-                </Button>
-              </div>
-
-              <div class="space-y-2">
-                <div class="text-xs font-medium text-gray-11">
-                  {t("settings.language")}
-                </div>
-                <div class="text-xs text-gray-9">
-                  {t("settings.language.description")}
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <For each={LANGUAGE_OPTIONS}>
-                    {(option) => (
-                      <Button
-                        variant={
-                          props.language === option.value
-                            ? "secondary"
-                            : "outline"
-                        }
-                        class="text-xs h-8 py-0 px-3"
-                        onClick={() => props.setLanguage(option.value)}
-                        disabled={props.busy}
-                      >
-                        {option.nativeName}
-                      </Button>
-                    )}
-                  </For>
-                </div>
-              </div>
-
-                <div class="text-xs text-gray-8">
-                  {t("settings.theme_system_hint")}
-                </div>
-              </div>
-            <Show when={isTauriRuntime()}>
-              <div class="bg-gray-2/30 border border-gray-6/50 rounded-2xl p-5 space-y-3">
-                <div>
-                  <div class="text-sm font-medium text-gray-12">{t("settings.appearance_title")}</div>
-                  <div class="text-xs text-gray-10">
-                    {t("settings.window_appearance_desc")}
-                  </div>
-                </div>
-
-                <div class="flex items-center justify-between bg-gray-1 p-3 rounded-xl border border-gray-6 gap-3">
-                  <div class="min-w-0">
-                    <div class="text-sm text-gray-12">{t("settings.hide_titlebar")}</div>
-                    <div class="text-xs text-gray-7">
-                      {t("settings.hide_titlebar_desc")}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    class="text-xs h-8 py-0 px-3 shrink-0"
-                    onClick={props.toggleHideTitlebar}
-                    disabled={props.busy}
-                  >
-                    {props.hideTitlebar ? t("settings.on") : t("settings.off")}
-                  </Button>
-                </div>
-              </div>
-            </Show>
-          </div>
+          <ReactIsland
+            component={AppearanceSettings}
+            props={{
+              busy: props.busy,
+              themeMode: props.themeMode,
+              onThemeModeChange: props.setThemeMode,
+              language: props.language,
+              onLanguageChange: props.setLanguage,
+              showWindowAppearance: isTauriRuntime(),
+              hideTitlebar: props.hideTitlebar,
+              onToggleHideTitlebar: props.toggleHideTitlebar,
+            }}
+            instanceKey={`appearance:${props.themeMode}:${props.language}:${props.hideTitlebar ? "hidden" : "visible"}`}
+          />
         </Match>
 
         <Match when={activeTab() === "den"}>
-            <DenSettingsPanel
-              developerMode={props.developerMode}
-              connectRemoteWorkspace={props.connectRemoteWorkspace}
-              openTeamBundle={props.openTeamBundle}
-              cloudOrgProviders={props.cloudOrgProviders}
-              importedCloudProviders={props.importedCloudProviders}
-              refreshCloudOrgProviders={props.refreshCloudOrgProviders}
-              connectCloudProvider={props.connectCloudProvider}
-              removeCloudProvider={props.removeCloudProvider}
-            />
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-den-screen",
+              renderContent: () => (
+                <DenSettingsPanel
+                  developerMode={props.developerMode}
+                  connectRemoteWorkspace={props.connectRemoteWorkspace}
+                  openTeamBundle={props.openTeamBundle}
+                  cloudOrgProviders={props.cloudOrgProviders}
+                  importedCloudProviders={props.importedCloudProviders}
+                  refreshCloudOrgProviders={props.refreshCloudOrgProviders}
+                  connectCloudProvider={props.connectCloudProvider}
+                  removeCloudProvider={props.removeCloudProvider}
+                />
+              ),
+            }}
+            instanceKey={`den:${props.cloudOrgProviders.length}:${Object.keys(props.importedCloudProviders).length}`}
+          />
         </Match>
 
         <Match when={activeTab() === "advanced"}>
-          <div class="space-y-6">
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-advanced-screen",
+              renderContent: () => (
+                <div class="space-y-6">
             <div class={`${settingsPanelClass} space-y-4`}>
               <div>
                 <div class="text-sm font-medium text-gray-12">{t("settings.runtime_title")}</div>
@@ -2238,325 +2216,66 @@ export default function SettingsView(props: SettingsViewProps) {
 
 
 
-          </div>
+                </div>
+              ),
+            }}
+            instanceKey={`advanced:${props.developerMode ? "dev" : "user"}:${props.openworkServerStatus}:${props.opencodeEnableExa ? "exa-on" : "exa-off"}`}
+          />
         </Match>
 
         <Match when={activeTab() === "updates"}>
-          <div class="space-y-6">
-            <div class={`${settingsPanelClass} space-y-3`}>
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <div class="text-sm font-medium text-gray-12">{t("settings.updates_title")}</div>
-                  <div class="text-xs text-gray-10">
-                    {t("settings.updates_desc")}
-                  </div>
-                </div>
-                <div class="text-xs text-gray-7 font-mono">
-                  {props.appVersion ? `v${props.appVersion}` : ""}
-                </div>
-              </div>
-
-              <Show
-                when={webDeployment()}
-                fallback={
-                  <Show
-                    when={
-                      props.updateEnv && props.updateEnv.supported === false
-                    }
-                    fallback={
-                      <>
-                        <div class="flex items-center justify-between bg-gray-1 p-3 rounded-xl border border-gray-6">
-                          <div class="space-y-0.5">
-                            <div class="text-sm text-gray-12">
-                              {t("settings.background_checks_title")}
-                            </div>
-                            <div class="text-xs text-gray-7">
-                              {t("settings.background_checks_desc")}
-                            </div>
-                          </div>
-                          <button
-                            class={`min-w-[70px] px-4 py-1.5 rounded-full text-xs font-medium border shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition-colors ${
-                              props.updateAutoCheck
-                                ? "bg-gray-12/12 text-gray-12 border-gray-6/30"
-                                : "bg-gray-1/70 text-gray-10 border-gray-6/60 hover:text-gray-12 hover:bg-gray-2/70"
-                            }`}
-                            onClick={props.toggleUpdateAutoCheck}
-                          >
-                            {props.updateAutoCheck ? t("settings.on") : t("settings.off")}
-                          </button>
-                        </div>
-
-                        <div class="flex items-center justify-between bg-gray-1 p-3 rounded-xl border border-gray-6">
-                          <div class="space-y-0.5">
-                            <div class="text-sm text-gray-12">{t("settings.auto_update_title")}</div>
-                            <div class="text-xs text-gray-7">
-                              {t("settings.auto_update_desc")}
-                            </div>
-                          </div>
-                          <button
-                            class={`min-w-[70px] px-4 py-1.5 rounded-full text-xs font-medium border shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] transition-colors ${
-                              props.updateAutoDownload
-                                ? "bg-gray-12/12 text-gray-12 border-gray-6/30"
-                                : "bg-gray-1/70 text-gray-10 border-gray-6/60 hover:text-gray-12 hover:bg-gray-2/70"
-                            }`}
-                            onClick={props.toggleUpdateAutoDownload}
-                          >
-                            {props.updateAutoDownload ? t("settings.on") : t("settings.off")}
-                          </button>
-                        </div>
-
-                        <div class="bg-gray-1 p-3 rounded-xl border border-gray-6 space-y-3">
-                          <div class="flex items-center justify-between gap-3">
-                            <div class="space-y-0.5">
-                              <div class="text-sm text-gray-12">
-                                <Switch>
-                                  <Match when={updateState() === "checking"}>
-                                    {t("settings.update_checking")}
-                                  </Match>
-                                  <Match when={updateState() === "available"}>
-                                    {t("settings.update_available_version", undefined, { version: updateVersion() ?? "" })}
-                                  </Match>
-                                  <Match when={updateState() === "downloading"}>
-                                    {t("settings.update_downloading")}
-                                  </Match>
-                                  <Match when={updateState() === "ready"}>
-                                    {t("settings.update_ready_version", undefined, { version: updateVersion() ?? "" })}
-                                  </Match>
-                                  <Match when={updateState() === "error"}>
-                                    {t("settings.update_check_failed")}
-                                  </Match>
-                                  <Match when={true}>{t("settings.update_uptodate")}</Match>
-                                </Switch>
-                              </div>
-                              <Show
-                                when={
-                                  updateState() === "idle" &&
-                                  updateLastCheckedAt()
-                                }
-                              >
-                                <div class="text-xs text-gray-7">
-                                  {t("settings.update_last_checked", undefined, { time: formatRelativeTime(updateLastCheckedAt() as number) })}
-                                </div>
-                              </Show>
-                              <Show
-                                when={
-                                  updateState() === "available" && updateDate()
-                                }
-                              >
-                                <div class="text-xs text-gray-7">
-                                  {t("settings.update_published", undefined, { date: updateDate() ?? "" })}
-                                </div>
-                              </Show>
-                              <Show when={updateState() === "downloading"}>
-                                <div class="text-xs text-gray-7">
-                                  {formatBytes(
-                                    (updateDownloadedBytes() as number) ?? 0,
-                                  )}
-                                  <Show when={updateTotalBytes() != null}>
-                                    {` / ${formatBytes(updateTotalBytes() as number)}`}
-                                  </Show>
-                                </div>
-                              </Show>
-                              <Show when={updateState() === "error"}>
-                                <div class="text-xs text-red-11">
-                                  {updateErrorMessage()}
-                                </div>
-                              </Show>
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                class="text-xs h-9 py-0 px-4 rounded-full border-gray-6/60 bg-gray-1/70 hover:bg-gray-2/70"
-                                onClick={props.checkForUpdates}
-                                disabled={
-                                  props.busy ||
-                                  updateState() === "checking" ||
-                                  updateState() === "downloading"
-                                }
-                              >
-                                {t("settings.update_check_button")}
-                              </Button>
-
-                              <Show when={updateState() === "available"}>
-                                <Button
-                                  variant="secondary"
-                                  class="text-xs h-9 py-0 px-4 rounded-full"
-                                  onClick={props.downloadUpdate}
-                                  disabled={
-                                    props.busy || updateState() === "downloading"
-                                  }
-                                >
-                                  {t("settings.update_download_button")}
-                                </Button>
-                              </Show>
-
-                              <Show when={updateState() === "ready"}>
-                                <Button
-                                  variant="secondary"
-                                  class="text-xs h-9 py-0 px-4 rounded-full"
-                                  onClick={props.installUpdateAndRestart}
-                                  disabled={props.busy || props.anyActiveRuns}
-                                  title={updateRestartBlockedMessage() ?? ""}
-                                >
-                                  {t("settings.update_install_button")}
-                                </Button>
-                              </Show>
-                            </div>
-                          </div>
-
-                          <Show when={updateRestartBlockedMessage()}>
-                            <div class="rounded-xl border border-amber-7/25 bg-amber-3/10 px-3 py-2 text-xs leading-relaxed text-amber-11">
-                              {updateRestartBlockedMessage()}
-                            </div>
-                          </Show>
-                        </div>
-
-                        <Show
-                          when={updateState() === "available" && updateNotes()}
-                        >
-                          <div class="rounded-xl bg-gray-1/20 border border-gray-6 p-3 text-xs text-gray-11 whitespace-pre-wrap max-h-40 overflow-auto">
-                            {updateNotes()}
-                          </div>
-                        </Show>
-                      </>
-                    }
-                  >
-                    <div class="rounded-xl bg-gray-1/20 border border-gray-6 p-3 text-sm text-gray-11">
-                      {props.updateEnv?.reason ??
-                        t("settings.updates_not_supported")}
-                    </div>
-                  </Show>
-                }
-              >
-                <div class="rounded-xl bg-gray-1/20 border border-gray-6 p-3 text-sm text-gray-11">
-                  {t("settings.updates_desktop_only")}
-                </div>
-              </Show>
-            </div>
-          </div>
+          <ReactIsland
+            component={UpdatesSettings}
+            props={{
+              busy: props.busy,
+              webDeployment: webDeployment(),
+              appVersion: props.appVersion,
+              updateAutoCheck: props.updateAutoCheck,
+              onToggleUpdateAutoCheck: props.toggleUpdateAutoCheck,
+              updateAutoDownload: props.updateAutoDownload,
+              onToggleUpdateAutoDownload: props.toggleUpdateAutoDownload,
+              updateStatus: props.updateStatus,
+              updateEnv: props.updateEnv,
+              onCheckForUpdates: props.checkForUpdates,
+              onDownloadUpdate: props.downloadUpdate,
+              onInstallUpdateAndRestart: props.installUpdateAndRestart,
+              anyActiveRuns: props.anyActiveRuns,
+              updateRestartBlockedMessage: updateRestartBlockedMessage(),
+            }}
+            instanceKey={`updates:${updateState()}:${updateVersion() ?? "none"}:${props.updateAutoCheck ? "check-on" : "check-off"}:${props.updateAutoDownload ? "download-on" : "download-off"}`}
+          />
         </Match>
 
         <Match when={activeTab() === "recovery"}>
-          <div class="space-y-6">
-            <div class={`${settingsPanelClass} space-y-3`}>
-              <div class="text-sm font-medium text-gray-12">
-                {t("settings.workspace_config_title")}
-              </div>
-              <div class="text-xs text-gray-10">
-                {t("settings.workspace_config_desc")}
-              </div>
-              <div class="text-[11px] text-gray-7 font-mono break-all">
-                {workspaceConfigPath() || t("settings.no_active_workspace")}
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  class="text-xs h-8 py-0 px-3"
-                  onClick={revealWorkspaceConfig}
-                  disabled={
-                    !isTauriRuntime() ||
-                    revealConfigBusy() ||
-                    !workspaceConfigPath()
-                  }
-                  title={
-                    !isTauriRuntime()
-                      ? t("settings.reveal_config_requires_desktop")
-                      : ""
-                  }
-                >
-                  <FolderOpen size={13} class="mr-1.5" />
-                  {revealConfigBusy() ? t("settings.opening") : t("settings.reveal_config")}
-                </Button>
-                <Button
-                  variant="danger"
-                  class="text-xs h-8 py-0 px-3"
-                  onClick={resetAppConfigDefaults}
-                  disabled={resetConfigBusy() || props.anyActiveRuns}
-                  title={
-                    props.anyActiveRuns
-                      ? t("settings.stop_runs_before_reset_config")
-                      : ""
-                  }
-                >
-                      {resetConfigBusy()
-                        ? t("settings.resetting")
-                        : t("settings.reset_config_defaults")}
-                    </Button>
-                  </div>
-                  <Show when={configActionStatus()}>
-                    {(status) => (
-                      <div class="text-xs text-gray-10">{status()}</div>
-                    )}
-                  </Show>
-                </div>
-                <div class="bg-gray-2/30 border border-gray-6/50 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div class="min-w-0">
-                    <div class="text-sm text-gray-12">{t("settings.opencode_cache")}</div>
-                    <div class="text-xs text-gray-7">
-                      {t("settings.opencode_cache_description")}
-                    </div>
-                    <Show when={props.cacheRepairResult}>
-                      <div class="text-xs text-gray-11 mt-2">
-                        {props.cacheRepairResult}
-                      </div>
-                    </Show>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    class="text-xs h-8 py-0 px-3 shrink-0"
-                    onClick={props.repairOpencodeCache}
-                    disabled={props.cacheRepairBusy || !isTauriRuntime()}
-                    title={
-                      isTauriRuntime()
-                        ? ""
-                        : t("settings.cache_repair_requires_desktop")
-                    }
-                  >
-                    {props.cacheRepairBusy ? t("settings.repairing_cache") : t("settings.repair_cache")}
-                  </Button>
-                </div>
-                <div class="bg-gray-2/30 border border-gray-6/50 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div class="min-w-0">
-                    <div class="text-sm text-gray-12">
-                      {t("settings.docker_containers_title")}
-                    </div>
-                    <div class="text-xs text-gray-7">
-                      {t("settings.docker_containers_desc")}
-                    </div>
-                    <Show when={props.dockerCleanupResult}>
-                      <div class="text-xs text-gray-11 mt-2">
-                        {props.dockerCleanupResult}
-                      </div>
-                    </Show>
-                  </div>
-                  <Button
-                    variant="danger"
-                    class="text-xs h-8 py-0 px-3 shrink-0"
-                    onClick={props.cleanupOpenworkDockerContainers}
-                    disabled={
-                      props.dockerCleanupBusy ||
-                      props.anyActiveRuns ||
-                      !isTauriRuntime()
-                    }
-                    title={
-                      !isTauriRuntime()
-                        ? t("settings.docker_requires_desktop")
-                        : props.anyActiveRuns
-                          ? t("settings.stop_runs_before_cleanup")
-                          : ""
-                    }
-                  >
-                    {props.dockerCleanupBusy
-                      ? t("settings.removing_containers")
-                      : t("settings.delete_containers")}
-                  </Button>
-                </div>
-          </div>
+          <ReactIsland
+            component={RecoverySettings}
+            props={{
+              workspaceConfigPath: workspaceConfigPath(),
+              showDesktopActions: isTauriRuntime(),
+              revealConfigBusy: revealConfigBusy(),
+              onRevealWorkspaceConfig: revealWorkspaceConfig,
+              resetConfigBusy: resetConfigBusy(),
+              onResetAppConfigDefaults: resetAppConfigDefaults,
+              anyActiveRuns: props.anyActiveRuns,
+              configActionStatus: configActionStatus(),
+              cacheRepairBusy: props.cacheRepairBusy,
+              cacheRepairResult: props.cacheRepairResult,
+              onRepairOpencodeCache: props.repairOpencodeCache,
+              dockerCleanupBusy: props.dockerCleanupBusy,
+              dockerCleanupResult: props.dockerCleanupResult,
+              onCleanupDockerContainers: props.cleanupOpenworkDockerContainers,
+            }}
+            instanceKey={`recovery:${workspaceConfigPath() ?? "none"}:${revealConfigBusy() ? "reveal-busy" : "reveal-idle"}:${resetConfigBusy() ? "reset-busy" : "reset-idle"}:${props.cacheRepairBusy ? "cache-busy" : "cache-idle"}:${props.dockerCleanupBusy ? "docker-busy" : "docker-idle"}`}
+          />
         </Match>
 
         <Match when={activeTab() === "debug"}>
-          <Show when={props.developerMode}>
+          <ReactIsland
+            component={LegacySettingsScreen}
+            props={{
+              slotId: "settings-debug-screen",
+              renderContent: () => (
+                <Show when={props.developerMode}>
             <section>
               <h3 class="text-sm font-medium text-gray-11 uppercase tracking-wider mb-4">
                 {t("settings.debug_section_title")}
@@ -3686,7 +3405,11 @@ export default function SettingsView(props: SettingsViewProps) {
                 </div>
               </div>
             </section>
-          </Show>
+                </Show>
+              ),
+            }}
+            instanceKey={`debug:${props.developerMode ? "dev" : "user"}:${props.anyActiveRuns ? "runs" : "idle"}`}
+          />
         </Match>
       </Switch>
       </div>

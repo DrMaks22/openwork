@@ -6,13 +6,18 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "../../app/lib/opencode";
 import { abortSessionSafe } from "../../app/lib/opencode-session";
 import type { OpenworkServerClient, OpenworkSessionSnapshot } from "../../app/lib/openwork-server";
-import type { ComposerAttachment, ComposerDraft, ComposerPart } from "../../app/types";
+import type { ComposerAttachment, ComposerDraft, ComposerPart, SkillCard } from "../../app/types";
 import { SessionDebugPanel } from "./debug-panel.react";
 import { SessionTranscript } from "./message-list.react";
 import { deriveSessionRenderModel } from "./transition-controller";
 import { getReactQueryClient } from "../kernel/query-client";
 import { ReactSessionComposer } from "./composer/composer.react";
 import type { ReactComposerNotice } from "./composer/notice.react";
+import {
+  MAX_ATTACHMENT_BYTES,
+  type ComposerToolMenuMcpItem,
+  type ToolMenuSection,
+} from "../../app/session/composer-tools";
 
 const AUTO_SCROLL_THRESHOLD_PX = 64;
 const scrollPositionBySession = new Map<string, number>();
@@ -50,10 +55,17 @@ type SessionSurfaceProps = {
   listAgents: () => Promise<import("@opencode-ai/sdk/v2/client").Agent[]>;
   onSelectAgent: (agent: string | null) => void;
   listCommands: () => Promise<import("../../app/types").SlashCommandOption[]>;
+  skills: SkillCard[];
+  mcpItems: ComposerToolMenuMcpItem[];
+  mcpStatusText: string;
+  onOpenSettings: (section: ToolMenuSection) => void;
   recentFiles: string[];
   searchFiles: (query: string) => Promise<string[]>;
   isRemoteWorkspace: boolean;
   isSandboxWorkspace: boolean;
+  hasEarlierMessages: boolean;
+  loadingEarlierMessages: boolean;
+  onLoadEarlierMessages: () => void | Promise<void>;
   onUploadInboxFiles?: ((files: File[], options?: { notify?: boolean }) => void | Promise<unknown>) | null;
 };
 
@@ -278,12 +290,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
       setNotice({ title: props.attachmentsDisabledReason ?? "Attachments are unavailable.", tone: "warning" });
       return;
     }
-    const oversized = files.filter((file) => file.size > 25 * 1024 * 1024);
-    const accepted = files.filter((file) => file.size <= 25 * 1024 * 1024);
+    const oversized = files.filter((file) => file.size > MAX_ATTACHMENT_BYTES);
+    const accepted = files.filter((file) => file.size <= MAX_ATTACHMENT_BYTES);
     if (oversized.length) {
       setNotice({
         title: oversized.length === 1 ? `${oversized[0]?.name ?? "File"} is too large` : `${oversized.length} files are too large`,
-        description: "Files over 25 MB were skipped.",
+        description: "Files over 8 MB were skipped.",
         tone: "warning",
       });
     }
@@ -443,6 +455,18 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
       <div className="relative min-h-0 flex-1">
       <div ref={scrollRef} onScroll={handleScroll} onWheel={handleWheel} className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-y-contain space-y-4 px-3 py-4 sm:px-5">
+      {props.hasEarlierMessages || props.loadingEarlierMessages ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            className="rounded-full border border-dls-border bg-dls-hover/70 px-3 py-1 text-xs text-dls-secondary transition-colors hover:bg-dls-active hover:text-dls-text disabled:opacity-60"
+            disabled={props.loadingEarlierMessages}
+            onClick={() => void props.onLoadEarlierMessages()}
+          >
+            {props.loadingEarlierMessages ? "Loading earlier..." : "Load earlier messages"}
+          </button>
+        </div>
+      ) : null}
       {showDelayedLoading && pendingSessionLoad ? (
         <div className="px-6 py-16">
           <div className="mx-auto max-w-sm rounded-3xl border border-dls-border bg-dls-hover/60 px-8 py-10 text-center">
@@ -505,6 +529,10 @@ export function SessionSurface(props: SessionSurfaceProps) {
         listAgents={props.listAgents}
         onSelectAgent={props.onSelectAgent}
         listCommands={props.listCommands}
+        skills={props.skills}
+        mcpItems={props.mcpItems}
+        mcpStatusText={props.mcpStatusText}
+        onOpenSettings={props.onOpenSettings}
         recentFiles={props.recentFiles}
         searchFiles={props.searchFiles}
         onInsertMention={handleInsertMention}

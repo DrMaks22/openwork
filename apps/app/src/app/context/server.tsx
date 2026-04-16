@@ -17,7 +17,7 @@ export function serverDisplayName(url: string) {
   return url.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
 
-type ServerContextValue = {
+export type ServerContextValue = {
   url: string;
   name: string;
   list: string[];
@@ -28,6 +28,16 @@ type ServerContextValue = {
 };
 
 const ServerContext = createContext<ServerContextValue | undefined>(undefined);
+
+export function ServerValueProvider(
+  props: ParentProps & { value: ServerContextValue },
+) {
+  return (
+    <ServerContext.Provider value={props.value}>
+      {props.children}
+    </ServerContext.Provider>
+  );
+}
 
 export function ServerProvider(props: ParentProps & { defaultUrl: string }) {
   const [list, setList] = createSignal<string[]>([]);
@@ -201,7 +211,7 @@ export function ServerProvider(props: ParentProps & { defaultUrl: string }) {
     remove,
   };
 
-  return <ServerContext.Provider value={value}>{props.children}</ServerContext.Provider>;
+  return <ServerValueProvider value={value}>{props.children}</ServerValueProvider>;
 }
 
 export function useServer() {

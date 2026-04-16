@@ -58,18 +58,17 @@ import { ProviderAuthModal,
 import WorkspaceSessionList from "../components/session/workspace-session-list";
 import { ShareWorkspaceModal } from "../workspace";
 import {
-  ArrowDownToLine,
   Box,
   History,
-  Loader2,
   MessageCircle,
   Plus,
   SlidersHorizontal,
-  X,
   Zap,
 } from "lucide-solid";
 import type { Language } from "../../i18n";
 import { t } from "../../i18n";
+import ReactSettingsShellHost from "./react-settings-shell-host";
+import ReactSettingsSidebarShellHost from "./react-settings-sidebar-shell-host";
 
 export type SettingsShellProps = {
   settingsTab: SettingsTab;
@@ -947,52 +946,6 @@ export default function SettingsShell(props: SettingsShellProps) {
     return t("session.update_available");
   });
 
-  const updatePillButtonTone = createMemo(() => {
-    const state = props.updateStatus?.state;
-    if (state === "ready") {
-      return props.anyActiveRuns
-        ? "text-amber-11 hover:text-amber-11 hover:bg-amber-3/30"
-        : "text-green-11 hover:text-green-11 hover:bg-green-3/30";
-    }
-    if (state === "downloading") {
-      return "text-blue-11 hover:text-blue-11 hover:bg-blue-3/30";
-    }
-    return "text-dls-secondary hover:text-dls-secondary hover:bg-lime-3/15";
-  });
-
-  const updatePillBorderTone = createMemo(() => {
-    const state = props.updateStatus?.state;
-    if (state === "ready") {
-      return props.anyActiveRuns ? "border-amber-7/35" : "border-green-7/35";
-    }
-    if (state === "downloading") {
-      return "border-blue-7/35";
-    }
-    return "border-lime-8/60";
-  });
-
-  const updatePillDotTone = createMemo(() => {
-    const state = props.updateStatus?.state;
-    if (state === "ready") {
-      return props.anyActiveRuns ? "text-amber-10 fill-amber-10" : "text-green-10 fill-green-10";
-    }
-    if (state === "downloading") {
-      return "text-blue-10";
-    }
-    return "text-lime-11 fill-lime-11";
-  });
-
-  const updatePillVersionTone = createMemo(() => {
-    const state = props.updateStatus?.state;
-    if (state === "ready") {
-      return props.anyActiveRuns ? "text-amber-11/75" : "text-green-11/75";
-    }
-    if (state === "downloading") {
-      return "text-blue-11/75";
-    }
-    return "text-dls-secondary";
-  });
-
   const updatePillTitle = createMemo(() => {
     const version = props.updateStatus?.version ? `v${props.updateStatus.version}` : "";
     const state = props.updateStatus?.state;
@@ -1013,133 +966,59 @@ export default function SettingsShell(props: SettingsShellProps) {
     }
     openSettings("general");
   };
+  const renderWorkspaceSidebar = () => (
+    <WorkspaceSessionList
+      workspaceSessionGroups={props.workspaceSessionGroups}
+      selectedWorkspaceId={props.selectedWorkspaceId}
+      developerMode={props.developerMode}
+      selectedSessionId={props.selectedSessionId}
+      connectingWorkspaceId={props.connectingWorkspaceId}
+      workspaceConnectionStateById={props.workspaceConnectionStateById}
+      newTaskDisabled={props.newTaskDisabled}
+      onSelectWorkspace={props.selectWorkspace}
+      onOpenSession={openSessionFromList}
+      onCreateTaskInWorkspace={createTaskInWorkspace}
+      onOpenRenameWorkspace={props.openRenameWorkspace}
+      onShareWorkspace={(workspaceId) => setShareWorkspaceId(workspaceId)}
+      onRevealWorkspace={revealWorkspaceInFinder}
+      onRecoverWorkspace={props.recoverWorkspace}
+      onTestWorkspaceConnection={props.testWorkspaceConnection}
+      onEditWorkspaceConnection={props.editWorkspaceConnection}
+      onForgetWorkspace={props.forgetWorkspace}
+      onOpenCreateWorkspace={props.openCreateWorkspace}
+    />
+  );
 
   return (
     <div class="h-[100dvh] min-h-screen w-full overflow-hidden bg-[var(--dls-app-bg)] p-3 md:p-4 text-dls-text font-sans">
       <div class="flex h-full w-full gap-3 md:gap-4">
-      <aside
-        class="relative hidden md:flex shrink-0 flex-col overflow-hidden rounded-[24px] border border-dls-border bg-dls-sidebar p-2.5"
-        style={{
-          width: `${leftSidebarWidth()}px`,
-          "min-width": `${leftSidebarWidth()}px`,
-        }}
-      >
-        <div class="shrink-0">
-          <Show when={showUpdatePill()}>
-            <button
-              type="button"
-              class={`group relative mb-3 flex w-full items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.2)] ${updatePillBorderTone()} ${updatePillButtonTone()}`}
-              onClick={handleUpdatePillClick}
-              title={updatePillTitle()}
-              aria-label={updatePillTitle()}
-            >
-              <Show
-                when={props.updateStatus?.state === "downloading"}
-                fallback={
-                  <ArrowDownToLine
-                    size={12}
-                    class={`${updatePillDotTone()} shrink-0 ${props.updateStatus?.state === "available" ? "animate-pulse" : ""}`}
-                    style={props.updateStatus?.state === "available" ? { "animation-duration": "3.5s" } : undefined}
-                  />
-                }
-              >
-                <Loader2 size={13} class={`animate-spin shrink-0 ${updatePillDotTone()}`} />
-              </Show>
-              <span class="min-w-0 flex-1 truncate whitespace-nowrap text-left">{updatePillLabel()}</span>
-              <Show when={props.updateStatus?.version}>
-                {(version) => (
-                  <span class={`ml-auto shrink-0 font-mono text-[10px] ${updatePillVersionTone()}`}>v{version()}</span>
-                )}
-              </Show>
-            </button>
-          </Show>
-        </div>
-        <div class="flex min-h-0 flex-1">
-          <WorkspaceSessionList
-            workspaceSessionGroups={props.workspaceSessionGroups}
-            selectedWorkspaceId={props.selectedWorkspaceId}
-            developerMode={props.developerMode}
-            selectedSessionId={props.selectedSessionId}
-            connectingWorkspaceId={props.connectingWorkspaceId}
-            workspaceConnectionStateById={props.workspaceConnectionStateById}
-            newTaskDisabled={props.newTaskDisabled}
-            onSelectWorkspace={props.selectWorkspace}
-            onOpenSession={openSessionFromList}
-            onCreateTaskInWorkspace={createTaskInWorkspace}
-            onOpenRenameWorkspace={props.openRenameWorkspace}
-            onShareWorkspace={(workspaceId) => setShareWorkspaceId(workspaceId)}
-            onRevealWorkspace={revealWorkspaceInFinder}
-            onRecoverWorkspace={props.recoverWorkspace}
-            onTestWorkspaceConnection={props.testWorkspaceConnection}
-            onEditWorkspaceConnection={props.editWorkspaceConnection}
-            onForgetWorkspace={props.forgetWorkspace}
-            onOpenCreateWorkspace={props.openCreateWorkspace}
-          />
-        </div>
-        <div
-          class="absolute right-0 top-3 hidden h-[calc(100%-24px)] w-2 translate-x-1/2 cursor-col-resize rounded-full bg-transparent transition-colors hover:bg-gray-6/40 md:block"
-          onPointerDown={startLeftSidebarResize}
-          title={t("session.resize_workspace_column")}
-          aria-label={t("session.resize_workspace_column")}
-        />
-
-      </aside>
+      <ReactSettingsSidebarShellHost
+        leftSidebarWidth={leftSidebarWidth()}
+        showUpdatePill={showUpdatePill()}
+        updatePillLabel={updatePillLabel()}
+        updatePillTitle={updatePillTitle()}
+        updateVersion={props.updateStatus?.version}
+        onUpdatePillClick={handleUpdatePillClick}
+        onStartResize={startLeftSidebarResize}
+        renderSidebar={renderWorkspaceSidebar}
+      />
 
       <main class="min-w-0 flex-1 flex flex-col overflow-hidden rounded-[24px] border border-dls-border bg-dls-surface shadow-[var(--dls-shell-shadow)]">
         <div class="flex-1 overflow-y-auto">
-        <header class="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-dls-border bg-dls-surface px-4 md:px-6">
-          <div class="flex min-w-0 items-center gap-3">
-            <Show when={showUpdatePill()}>
-              <button
-                type="button"
-                class={`md:hidden flex items-center gap-1.5 rounded-full border bg-dls-surface px-2.5 py-1 text-xs font-medium shadow-sm transition-colors active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--dls-accent-rgb),0.2)] ${updatePillBorderTone()} ${updatePillButtonTone()}`}
-                onClick={handleUpdatePillClick}
-                title={updatePillTitle()}
-                aria-label={updatePillTitle()}
-              >
-                <Show
-                  when={props.updateStatus?.state === "downloading"}
-                  fallback={
-                    <ArrowDownToLine
-                      size={12}
-                      class={`${updatePillDotTone()} shrink-0 ${props.updateStatus?.state === "available" ? "animate-pulse" : ""}`}
-                      style={props.updateStatus?.state === "available" ? { "animation-duration": "3.5s" } : undefined}
-                    />
-                  }
-                >
-                  <Loader2 size={13} class={`animate-spin shrink-0 ${updatePillDotTone()}`} />
-                </Show>
-                <span class="text-[11px]">{updatePillLabel()}</span>
-                <Show when={props.updateStatus?.version}>
-                  {(version) => (
-                    <span class={`hidden sm:inline font-mono text-[10px] ${updatePillVersionTone()}`}>v{version()}</span>
-                  )}
-                </Show>
-              </button>
-            </Show>
-            <h1 class="truncate text-[15px] font-semibold text-dls-text">{title()}</h1>
-            <span class="hidden truncate text-[13px] text-dls-secondary lg:inline">
-              {workspaceLabel(props.selectedWorkspaceDisplay)}
-            </span>
-            <Show when={props.developerMode}>
-              <span class="hidden text-[12px] text-dls-secondary lg:inline">{props.headerStatus}</span>
-            </Show>
-            <Show when={props.busyHint}>
-              <span class="hidden text-[12px] text-dls-secondary lg:inline">{props.busyHint}</span>
-            </Show>
-          </div>
-          <div class="flex items-center text-gray-10">
-            <button
-              type="button"
-              class="flex h-9 w-9 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text"
-              onClick={props.toggleSettings}
-              title={t("dashboard.close_settings")}
-              aria-label={t("dashboard.close_settings")}
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </header>
+        <ReactSettingsShellHost
+          title={title()}
+          workspaceLabel={workspaceLabel(props.selectedWorkspaceDisplay)}
+          developerMode={props.developerMode}
+          headerStatus={props.headerStatus}
+          busyHint={props.busyHint}
+          showUpdatePill={showUpdatePill()}
+          updatePillLabel={updatePillLabel()}
+          updatePillTitle={updatePillTitle()}
+          updateVersion={props.updateStatus?.version}
+          onUpdatePillClick={handleUpdatePillClick}
+          onClose={props.toggleSettings}
+          closeLabel={t("dashboard.close_settings")}
+        />
 
         <div class="w-full space-y-10 p-6 md:p-10">
           <SettingsView

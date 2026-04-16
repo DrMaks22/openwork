@@ -54,7 +54,7 @@ type GlobalState = {
   vcs: Record<string, VcsInfo | null>;
 };
 
-type GlobalSyncContextValue = {
+export type GlobalSyncContextValue = {
   data: Store<GlobalState>;
   set: SetStoreFunction<GlobalState>;
   child: (directory: string) => WorkspaceStore;
@@ -63,6 +63,16 @@ type GlobalSyncContextValue = {
 };
 
 const GlobalSyncContext = createContext<GlobalSyncContextValue | undefined>(undefined);
+
+export function GlobalSyncValueProvider(
+  props: ParentProps & { value: GlobalSyncContextValue },
+) {
+  return (
+    <GlobalSyncContext.Provider value={props.value}>
+      {props.children}
+    </GlobalSyncContext.Provider>
+  );
+}
 
 const createWorkspaceState = (): WorkspaceState => ({
   status: "idle",
@@ -289,7 +299,7 @@ export function GlobalSyncProvider(props: ParentProps) {
     subscriptions.set(globalKey, unsubscribe);
   }
 
-  return <GlobalSyncContext.Provider value={value}>{props.children}</GlobalSyncContext.Provider>;
+  return <GlobalSyncValueProvider value={value}>{props.children}</GlobalSyncValueProvider>;
 }
 
 export function useGlobalSync() {

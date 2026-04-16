@@ -2,10 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { Agent } from "@opencode-ai/sdk/v2/client";
 import fuzzysort from "fuzzysort";
-import type { ComposerAttachment } from "../../../app/types";
+import type { ComposerAttachment, SkillCard, SlashCommandOption } from "../../../app/types";
 import { LexicalPromptEditor } from "./editor.react";
-import type { SlashCommandOption } from "../../../app/types";
 import { ReactComposerNotice, type ReactComposerNotice as ReactComposerNoticeData } from "./notice.react";
+import {
+  formatMcpStatusLabel,
+  MAX_ATTACHMENT_BYTES,
+  mergeSlashCommandsWithSkills,
+  mcpStatusBadgeClass,
+  type ComposerToolMenuMcpItem,
+  type ToolMenuSection,
+} from "../../../app/session/composer-tools";
 
 type MentionItem = {
   id: string;
@@ -46,6 +53,10 @@ type ComposerProps = {
   listAgents: () => Promise<Agent[]>;
   onSelectAgent: (agent: string | null) => void;
   listCommands: () => Promise<SlashCommandOption[]>;
+  skills: SkillCard[];
+  mcpItems: ComposerToolMenuMcpItem[];
+  mcpStatusText: string;
+  onOpenSettings: (section: ToolMenuSection) => void;
   recentFiles: string[];
   searchFiles: (query: string) => Promise<string[]>;
   onInsertMention: (kind: "agent" | "file", value: string) => void;
@@ -85,6 +96,8 @@ export function ReactSessionComposer(props: ComposerProps) {
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [variantMenuOpen, setVariantMenuOpen] = useState(false);
   const [commands, setCommands] = useState<SlashCommandOption[]>([]);
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [toolMenuSection, setToolMenuSection] = useState<ToolMenuSection>("commands");
   const [slashOpen, setSlashOpen] = useState(false);
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -93,6 +106,7 @@ export function ReactSessionComposer(props: ComposerProps) {
   const [agentMenuIndex, setAgentMenuIndex] = useState(0);
   const agentItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [dropzoneActive, setDropzoneActive] = useState(false);
+  const toolMenuRef = useRef<HTMLDivElement | null>(null);
 
   const slashMatch = props.draft.match(/^\/(\S*)$/);
   const slashQuery = slashMatch?.[1] ?? "";
@@ -129,6 +143,12 @@ export function ReactSessionComposer(props: ComposerProps) {
   }, [slashOpen, props]);
 
   useEffect(() => {
+    if (!toolMenuOpen) return;
+    if (toolMenuSection === "mcps") return;
+    void props.listCommands().then(setCommands).catch(() => setCommands([]));
+  }, [toolMenuOpen, toolMenuSection, props]);
+
+  useEffect(() => {
     if (!mentionOpen) return;
     let cancelled = false;
     void Promise.all([props.listAgents(), props.searchFiles(mentionQuery)]).then(([agentList, files]) => {
@@ -148,11 +168,29 @@ export function ReactSessionComposer(props: ComposerProps) {
     };
   }, [mentionOpen, mentionQuery, props]);
 
+  useEffect(() => {
+    if (!toolMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!toolMenuRef.current?.contains(event.target as Node)) {
+        setToolMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [toolMenuOpen]);
+
+  const availableSlashCommands = mergeSlashCommandsWithSkills(commands, props.skills);
+  const toolCommandItems = availableSlashCommands.slice(0, 8);
+  const toolSkillItems = props.skills.slice(0, 8);
+
   const slashFiltered = !slashOpen
     ? []
     : slashQuery
-      ? fuzzysort.go(slashQuery, commands, { keys: ["name", "description"] }).map((entry) => entry.obj).slice(0, 8)
-      : commands.slice(0, 8);
+      ? fuzzysort
+          .go(slashQuery, availableSlashCommands, { keys: ["name", "description"] })
+          .map((entry) => entry.obj)
+          .slice(0, 8)
+      : availableSlashCommands.slice(0, 8);
   const mentionFiltered = !mentionOpen
     ? []
     : mentionQuery
@@ -195,6 +233,12 @@ export function ReactSessionComposer(props: ComposerProps) {
   };
 
   const handleKeyDownCapture: React.KeyboardEventHandler<HTMLDivElement> = (event) => {
+    if (toolMenuOpen && event.key === "Escape") {
+      event.preventDefault();
+      setToolMenuOpen(false);
+      return;
+    }
+
     if (agentMenuOpen) {
       const total = agents.length + 1;
       if (event.key === "ArrowDown") {
@@ -327,6 +371,154 @@ export function ReactSessionComposer(props: ComposerProps) {
                       {agent.name}
                     </button>
                   ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="relative" ref={toolMenuRef}>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-full border border-dls-border bg-dls-hover/60 px-3 py-1 text-xs font-medium text-dls-text transition-colors hover:bg-dls-hover"
+                onClick={() => setToolMenuOpen((value) => !value)}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 22v-5" />
+                  <path d="M9 8V2" />
+                  <path d="M15 8V2" />
+                  <path d="M18 8a6 6 0 0 1-12 0" />
+                  <path d="M8 15h8" />
+                  <path d="M7 19h10" />
+                </svg>
+                Tools
+              </button>
+              {toolMenuOpen ? (
+                <div className="absolute left-0 top-full z-20 mt-2 w-[320px] rounded-2xl border border-dls-border bg-dls-surface p-2 shadow-[var(--dls-card-shadow)]">
+                  <div className="mb-2 flex gap-1 rounded-xl bg-dls-hover/60 p-1">
+                    {(["commands", "skills", "mcps"] as ToolMenuSection[]).map((section) => (
+                      <button
+                        key={section}
+                        type="button"
+                        className={`flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium capitalize transition-colors ${
+                          toolMenuSection === section
+                            ? "bg-dls-surface text-dls-text shadow-sm"
+                            : "text-dls-secondary hover:text-dls-text"
+                        }`}
+                        onClick={() => setToolMenuSection(section)}
+                      >
+                        {section === "mcps" ? "MCPs" : section}
+                      </button>
+                    ))}
+                  </div>
+                  {toolMenuSection === "commands" ? (
+                    toolCommandItems.length > 0 ? (
+                      <div className="grid gap-1">
+                        {toolCommandItems.map((command) => (
+                          <button
+                            key={command.id}
+                            type="button"
+                            className="rounded-xl px-3 py-2 text-left transition-colors hover:bg-dls-hover"
+                            onClick={() => {
+                              props.onDraftChange(`/${command.name} `);
+                              setToolMenuOpen(false);
+                            }}
+                          >
+                            <div className="text-sm font-medium text-dls-text">/{command.name}</div>
+                            {command.description ? (
+                              <div className="text-xs text-dls-secondary">{command.description}</div>
+                            ) : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dls-border bg-dls-hover/30 px-3 py-4 text-sm text-dls-secondary">
+                        No commands found.
+                      </div>
+                    )
+                  ) : null}
+                  {toolMenuSection === "skills" ? (
+                    toolSkillItems.length > 0 ? (
+                      <div className="grid gap-1">
+                        {toolSkillItems.map((skill) => (
+                          <button
+                            key={skill.name}
+                            type="button"
+                            className="rounded-xl px-3 py-2 text-left transition-colors hover:bg-dls-hover"
+                            onClick={() => {
+                              props.onDraftChange(`/${skill.name} `);
+                              setToolMenuOpen(false);
+                            }}
+                          >
+                            <div className="text-sm font-medium text-dls-text">{skill.name}</div>
+                            <div className="text-xs text-dls-secondary">
+                              {skill.description || "Installed skill"}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dls-border bg-dls-hover/30 px-3 py-4 text-sm text-dls-secondary">
+                        No skills available.
+                      </div>
+                    )
+                  ) : null}
+                  {toolMenuSection === "mcps" ? (
+                    props.mcpItems.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="px-1 text-[11px] uppercase tracking-[0.12em] text-dls-secondary">
+                          {props.mcpStatusText}
+                        </div>
+                        <div className="grid gap-1">
+                          {props.mcpItems.map((item) => (
+                            <button
+                              key={item.name}
+                              type="button"
+                              className="rounded-xl px-3 py-2 text-left transition-colors hover:bg-dls-hover"
+                              onClick={() => {
+                                props.onOpenSettings("mcps");
+                                setToolMenuOpen(false);
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-medium text-dls-text">{item.name}</div>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${mcpStatusBadgeClass(item.status)}`}
+                                >
+                                  {formatMcpStatusLabel(item.status)}
+                                </span>
+                              </div>
+                              <div className="truncate text-xs text-dls-secondary">{item.details}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dls-border bg-dls-hover/30 px-3 py-4 text-sm text-dls-secondary">
+                        No MCP servers configured.
+                      </div>
+                    )
+                  ) : null}
+                  <div className="mt-2 border-t border-dls-border pt-2">
+                    <button
+                      type="button"
+                      className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-dls-text transition-colors hover:bg-dls-hover"
+                      onClick={() => {
+                        props.onOpenSettings(toolMenuSection);
+                        setToolMenuOpen(false);
+                      }}
+                    >
+                      Open {toolMenuSection === "mcps" ? "extensions" : toolMenuSection} settings
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>

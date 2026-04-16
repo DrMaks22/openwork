@@ -29,12 +29,16 @@ export type Platform = {
 
 const PlatformContext = createContext<Platform | undefined>(undefined);
 
-export function PlatformProvider(props: ParentProps & { value: Platform }) {
+export function PlatformValueProvider(props: ParentProps & { value: Platform }) {
   return (
     <PlatformContext.Provider value={props.value}>
       {props.children}
     </PlatformContext.Provider>
   );
+}
+
+export function PlatformProvider(props: ParentProps & { value: Platform }) {
+  return <PlatformValueProvider value={props.value}>{props.children}</PlatformValueProvider>;
 }
 
 export function usePlatform() {
