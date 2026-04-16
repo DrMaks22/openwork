@@ -17,11 +17,7 @@
     "src/index.react.tsx",
     "src/react-app/**/*.ts",
     "src/react-app/**/*.tsx",
-    "src/react/settings/appearance-settings.react.tsx",
-    "src/react/settings/updates-settings.react.tsx",
-    "src/react/settings/recovery-settings.react.tsx",
     "src/app/constants.ts",
-    "src/app/mcp.ts",
     "src/app/theme.ts",
     "src/app/types.ts",
     "src/app/utils/index.ts",
@@ -31,8 +27,10 @@
     "src/app/lib/opencode-session.ts",
     "src/app/lib/openwork-deployment.ts",
     "src/app/lib/openwork-server.ts",
+    "src/app/lib/openwork-session-runtime.ts",
     "src/app/lib/session-scope.ts",
     "src/app/lib/tauri.ts",
+    "src/app/session/composer-tools.ts",
     "src/i18n/**/*.ts",
     "vite.config.ts"
   ]

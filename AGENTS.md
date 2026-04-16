@@ -115,13 +115,13 @@ Design principles for hot reload:
 
 ## Technology Stack
 
-| Layer                | Technology                |
-| -------------------- | ------------------------- |
-| Desktop/Mobile shell | Tauri 2.x                 |
-| Frontend             | SolidJS + TailwindCSS     |
-| State                | Solid stores + IndexedDB  |
-| IPC                  | Tauri commands + events   |
-| OpenCode integration | Spawn CLI or embed binary |
+| Layer                | Technology                   |
+| -------------------- | ---------------------------- |
+| Desktop/Mobile shell | Tauri 2.x                    |
+| Frontend             | React 19 + TailwindCSS v4    |
+| State                | Zustand store + TanStack Query |
+| IPC                  | Tauri commands + events      |
+| OpenCode integration | Spawn CLI or embed binary    |
 
 ## Repository Guidance
 
@@ -205,13 +205,19 @@ Key primitives to expose:
 | Interaction latency    | <100ms         |
 | Bundle size (JS)       | <200KB gzipped |
 
-## Skill: SolidJS Patterns
+## Skill: React Runtime Layout
 
-When editing SolidJS UI (`apps/app/src/**/*.tsx`), consult:
+The `apps/app` runtime is now React-only. The tree under `apps/app/src/react-app/` is organized by domain:
 
-* `.opencode/skills/solidjs-patterns/SKILL.md`
+* `shell/` — app bootstrap, root layout, routing
+* `domains/session/{chat,surface,sync}` — session chrome, transcript/composer, event sync
+* `domains/settings/{settings-screen.tsx,tabs/}` — settings screen + per-tab modules
+* `domains/workspace/` — workspace create/connect flows
+* `kernel/{store.ts,selectors.ts}` — Zustand store plus colocated selectors
+* `design-system/{ui,lib}` — primitives (`button`, `card`, `input`, `tabs`) + `cn`
+* `infra/query-client.ts` — React Query singleton
 
-This captures OpenWork’s preferred reactivity + UI state patterns (avoid global `busy()` deadlocks; use scoped async state).
+Framework-agnostic modules (`lib/*`, `theme`, `types`, `utils`, `constants`, `session/composer-tools`, `i18n`) stay under `apps/app/src/app/` and `apps/app/src/i18n/` and are consumed by the React runtime.
 
 ## Skill: Trigger a Release
 

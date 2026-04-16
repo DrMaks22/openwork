@@ -64,7 +64,7 @@ export type WorkerProfile = {
   source: "manual" | "cloud";
 };
 
-type OpenworkStore = {
+export type OpenworkStore = {
   bootstrapping: boolean;
   server: ServerState;
   workerProfiles: WorkerProfile[];
@@ -124,9 +124,9 @@ const SESSION_BY_WORKSPACE_KEY = "openwork.react.sessionByWorkspace";
 const WORKER_PROFILES_KEY = "openwork.react.workerProfiles";
 
 let eventAbortController: AbortController | null = null;
-const EMPTY_MESSAGES: MessageWithParts[] = [];
-const EMPTY_TODOS: TodoItem[] = [];
-const EMPTY_PERMISSIONS: PendingPermission[] = [];
+export const EMPTY_MESSAGES: MessageWithParts[] = [];
+export const EMPTY_TODOS: TodoItem[] = [];
+export const EMPTY_PERMISSIONS: PendingPermission[] = [];
 
 const readStoredWorkerProfiles = () => {
   if (typeof window === "undefined") return [] as WorkerProfile[];
@@ -416,7 +416,7 @@ const summarizeError = (error: unknown) => {
   return serialized && serialized !== "{}" ? serialized : "Unexpected error";
 };
 
-const workspaceRoot = (workspace: OpenworkWorkspaceInfo | null | undefined) =>
+export const workspaceRoot = (workspace: OpenworkWorkspaceInfo | null | undefined) =>
   workspace?.directory?.trim() || workspace?.path?.trim() || "";
 
 const scopedDirectory = (workspace: OpenworkWorkspaceInfo | null | undefined) =>
@@ -1325,55 +1325,4 @@ export const useOpenworkStore = create<OpenworkStore>((set, get) => {
   };
 });
 
-export const selectActiveWorkspace = (state: OpenworkStore) =>
-  state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null;
-
-export const selectSelectedSession = (state: OpenworkStore) =>
-  state.sessions.find((session) => session.id === state.selectedSessionId) ?? null;
-
-export const selectSelectedMessages = (state: OpenworkStore) =>
-  state.selectedSessionId ? state.messagesBySessionId[state.selectedSessionId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES;
-
-export const selectSelectedTodos = (state: OpenworkStore) =>
-  state.selectedSessionId ? state.todosBySessionId[state.selectedSessionId] ?? EMPTY_TODOS : EMPTY_TODOS;
-
-export const selectSelectedHasEarlierMessages = (state: OpenworkStore) =>
-  state.selectedSessionId ? !state.sessionCompleteById[state.selectedSessionId] : false;
-
-export const selectSelectedLoadingEarlierMessages = (state: OpenworkStore) =>
-  state.selectedSessionId ? Boolean(state.loadingMoreBySessionId[state.selectedSessionId]) : false;
-
-export const selectSelectedStatus = (state: OpenworkStore) =>
-  state.selectedSessionId ? state.sessionStatusById[state.selectedSessionId] ?? "idle" : "idle";
-
-export const selectScopedPermissions = (state: OpenworkStore) => {
-  const sessionId = state.selectedSessionId;
-  if (!sessionId) return state.pendingPermissions.length ? state.pendingPermissions : EMPTY_PERMISSIONS;
-  const scoped = state.pendingPermissions.filter((item) => item.sessionID === sessionId);
-  return scoped.length ? scoped : EMPTY_PERMISSIONS;
-};
-
-export const selectScopedQuestions = (state: OpenworkStore) => {
-  const sessionId = state.selectedSessionId;
-  if (!sessionId) return state.pendingQuestions;
-  return state.pendingQuestions.filter((item) => item.sessionID === sessionId);
-};
-
-export const selectServerHostLabel = (state: OpenworkStore) => {
-  const value = normalizeOpenworkServerUrl(state.server.url) ?? "";
-  if (!value) return "Not connected";
-  try {
-    const url = new URL(value);
-    return url.host;
-  } catch {
-    return value.replace(/^https?:\/\//, "");
-  }
-};
-
-export const selectWorkspaceScopeLabel = (workspace: OpenworkWorkspaceInfo | null) => {
-  if (!workspace) return "No workspace selected";
-  const root = workspaceRoot(workspace);
-  if (!root) return workspace.workspaceType === "remote" ? "Remote workspace" : "Workspace ready";
-  const normalized = normalizeDirectoryPath(root);
-  return normalized || root;
-};
+export * from "./selectors";

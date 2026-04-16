@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, HashRouter } from "react-router-dom";
 import "streamdown/styles.css";
 
@@ -8,7 +9,8 @@ import { getOpenWorkDeployment } from "./app/lib/openwork-deployment";
 import { bootstrapTheme } from "./app/theme";
 import { isTauriRuntime } from "./app/utils";
 import { initLocale } from "./i18n";
-import { AppRoot } from "./react-app/app";
+import { AppRoot } from "./react-app/shell/app-root";
+import { getReactQueryClient } from "./react-app/infra/query-client";
 import "./react-app/styles.css";
 
 bootstrapTheme();
@@ -66,11 +68,14 @@ function startDeepLinkBridge() {
 startDeepLinkBridge();
 
 const Router = isTauriRuntime() ? HashRouter : BrowserRouter;
+const queryClient = getReactQueryClient();
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <Router>
-      <AppRoot />
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <AppRoot />
+      </Router>
+    </QueryClientProvider>
   </React.StrictMode>,
 );
