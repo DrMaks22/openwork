@@ -39,7 +39,7 @@ function step(name, fn) {
     });
 }
 
-const targetPath = args.get("path") ?? "src/app/pages/session.tsx";
+const targetPath = args.get("path") ?? "src/react-app/session/chat-panel.tsx";
 const absolutePath = (() => {
   const trimmed = String(targetPath || "").trim();
   if (!trimmed) return "";
@@ -111,7 +111,7 @@ try {
       noReply: true,
       parts: [
         { type: "text", text: " " },
-        { type: "file", mime: "text/plain", url: fileUrl, filename: "session.tsx" },
+        { type: "file", mime: "text/plain", url: fileUrl, filename: "chat-panel.tsx" },
       ],
     });
     return messagesSummary("after-space-text");
@@ -124,7 +124,7 @@ try {
       noReply: true,
       parts: [
         { type: "text", text: `@${targetPath}` },
-        { type: "file", mime: "text/plain", url: fileUrl, filename: "session.tsx" },
+        { type: "file", mime: "text/plain", url: fileUrl, filename: "chat-panel.tsx" },
       ],
     });
     const summary = await messagesSummary("after-fixed");

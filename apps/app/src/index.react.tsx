@@ -1,26 +1,13 @@
-/** @jsxImportSource react */
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, HashRouter } from "react-router-dom";
+import "streamdown/styles.css";
 
+import { AppRoot } from "./react-app/app";
+import { nativeDeepLinkEvent, pushPendingDeepLinks } from "./app/lib/deep-link-bridge";
 import { getOpenWorkDeployment } from "./app/lib/openwork-deployment";
-import { bootstrapTheme } from "./app/theme";
 import { isTauriRuntime } from "./app/utils";
-import { initLocale } from "./i18n";
-import { getReactQueryClient } from "./react-app/infra/query-client";
-import {
-  createDefaultPlatform,
-  PlatformProvider,
-} from "./react-app/kernel/platform";
-import { AppProviders } from "./react-app/shell/providers";
-import { AppRoot } from "./react-app/shell/app-root";
-import { startDeepLinkBridge } from "./react-app/shell/startup-deep-links";
-import "./app/index.css";
-
-bootstrapTheme();
-initLocale();
-startDeepLinkBridge();
+import "./react-app/styles.css";
 
 const root = document.getElementById("root");
 
@@ -30,20 +17,55 @@ if (!root) {
 
 root.dataset.openworkDeployment = getOpenWorkDeployment();
 
-const platform = createDefaultPlatform();
-const queryClient = getReactQueryClient();
+let deepLinkBridgeStarted = false;
+
+function startDeepLinkBridge() {
+  if (typeof window === "undefined" || deepLinkBridgeStarted) {
+    return;
+  }
+
+  deepLinkBridgeStarted = true;
+
+  if (!isTauriRuntime()) {
+    pushPendingDeepLinks(window, [window.location.href]);
+    return;
+  }
+
+  void (async () => {
+    try {
+      const [{ getCurrent, onOpenUrl }, { listen }] = await Promise.all([
+        import("@tauri-apps/plugin-deep-link"),
+        import("@tauri-apps/api/event"),
+      ]);
+
+      const startUrls = await getCurrent().catch(() => null);
+      if (Array.isArray(startUrls)) {
+        pushPendingDeepLinks(window, startUrls);
+      }
+
+      await onOpenUrl((urls) => {
+        pushPendingDeepLinks(window, urls);
+      }).catch(() => undefined);
+
+      await listen<string[]>(nativeDeepLinkEvent, (event) => {
+        if (Array.isArray(event.payload)) {
+          pushPendingDeepLinks(window, event.payload);
+        }
+      }).catch(() => undefined);
+    } catch {
+      // ignore
+    }
+  })();
+}
+
+startDeepLinkBridge();
+
 const Router = isTauriRuntime() ? HashRouter : BrowserRouter;
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <PlatformProvider value={platform}>
-        <AppProviders>
-          <Router>
-            <AppRoot />
-          </Router>
-        </AppProviders>
-      </PlatformProvider>
-    </QueryClientProvider>
+    <Router>
+      <AppRoot />
+    </Router>
   </React.StrictMode>,
 );
