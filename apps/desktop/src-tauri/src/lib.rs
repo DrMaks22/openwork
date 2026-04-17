@@ -58,9 +58,13 @@ use workspace::watch::WorkspaceWatchState;
 
 const NATIVE_DEEP_LINK_EVENT: &str = "openwork:deep-link-native";
 
+fn is_dev_mode() -> bool {
+    std::env::var("OPENWORK_DEV_MODE").ok().as_deref() == Some("1")
+}
+
 #[cfg(target_os = "macos")]
 fn set_dev_app_name() {
-    if std::env::var("OPENWORK_DEV_MODE").ok().as_deref() != Some("1") {
+    if !is_dev_mode() {
         return;
     }
 
@@ -233,8 +237,14 @@ pub fn run() {
             event: WindowEvent::CloseRequested { api, .. },
             ..
         } if label == "main" => {
-            api.prevent_close();
-            hide_main_window(&app_handle);
+            if is_dev_mode() {
+                api.prevent_close();
+                stop_managed_services(&app_handle);
+                app_handle.exit(0);
+            } else {
+                api.prevent_close();
+                hide_main_window(&app_handle);
+            }
         }
         #[cfg(target_os = "macos")]
         RunEvent::Opened { urls } => {
