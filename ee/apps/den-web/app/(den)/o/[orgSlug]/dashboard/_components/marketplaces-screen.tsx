@@ -31,7 +31,7 @@ export function MarketplacesScreen() {
       icon={Store}
       badgeLabel="Preview"
       title="Marketplaces"
-      description="Marketplaces group plugins imported from a Claude marketplace repository."
+      description="Marketplaces group plugins imported from supported marketplace repositories."
       colors={["#FEF3C7", "#92400E", "#F59E0B", "#FDE68A"]}
     >
       <div className="mb-6">
@@ -61,7 +61,7 @@ export function MarketplacesScreen() {
           title={marketplaces.length === 0 ? "No marketplaces yet" : "No marketplaces match that search"}
           description={
             marketplaces.length === 0
-              ? "Marketplaces show up here when you import a repository that has a `.claude-plugin/marketplace.json` manifest."
+              ? "Marketplaces show up here when you import a repository that has a supported marketplace manifest like `.claude-plugin/marketplace.json` or `.agents/plugins/marketplace.json`."
               : "Try a different search term or open the plugins tab."
           }
           action={
@@ -147,7 +147,7 @@ function ConnectIntegrationEmptyState({ integrationsHref }: { integrationsHref: 
   return (
     <EmptyState
       title="Connect an integration to discover marketplaces"
-      description="Marketplaces are created when OpenWork finds a `.claude-plugin/marketplace.json` manifest in a connected repository."
+      description="Marketplaces are created when OpenWork finds a supported marketplace manifest in a connected repository."
       action={{ href: integrationsHref, label: "Open Integrations", icon: Cable }}
     />
   );
