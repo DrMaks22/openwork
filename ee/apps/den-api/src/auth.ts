@@ -20,9 +20,11 @@ import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid";
 import * as schema from "@openwork-ee/den-db/schema";
 import { apiKey } from "@better-auth/api-key";
 import { scim } from "@better-auth/scim";
+import { sso } from "@better-auth/sso";
 import { APIError } from "better-call";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { and, eq } from "@openwork-ee/den-db/drizzle";
 import { emailOTP, organization } from "better-auth/plugins";
 
 const socialProviders = {
@@ -50,6 +52,20 @@ function hasRole(roleValue: string, roleName: string) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .includes(roleName);
+}
+
+function maybeString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function pickRemoteIdentity(userInfo: Record<string, unknown>) {
+  return (
+    maybeString(userInfo.sub) ??
+    maybeString(userInfo.id) ??
+    maybeString(userInfo.nameID) ??
+    maybeString(userInfo.nameId) ??
+    maybeString(userInfo.email)
+  );
 }
 
 function getInvitationOrigin() {
@@ -130,6 +146,12 @@ export const auth = betterAuth({
             return createDenTypeId("organizationRole");
           case "scimProvider":
             return createDenTypeId("scimProvider");
+          case "ssoProvider":
+            return createDenTypeId("ssoProvider");
+          case "ssoConnection":
+            return createDenTypeId("ssoConnection");
+          case "externalIdentity":
+            return createDenTypeId("externalIdentity");
           default:
             return false;
         }
@@ -258,6 +280,73 @@ export const auth = betterAuth({
             message: "Only workspace owners and admins can manage SCIM.",
           });
         }
+      },
+    }),
+    sso({
+      providersLimit: 1000,
+      provisionUserOnEveryLogin: true,
+      organizationProvisioning: {
+        disabled: false,
+        defaultRole: "member",
+      },
+      saml: {
+        enableInResponseToValidation: true,
+        allowIdpInitiated: true,
+        algorithms: {
+          onDeprecated: "warn",
+        },
+      },
+      provisionUser: async ({ user, userInfo, provider }) => {
+        if (!provider.organizationId) {
+          return;
+        }
+
+        const existingRows = await db
+          .select()
+          .from(schema.ExternalIdentityTable)
+          .where(and(
+            eq(schema.ExternalIdentityTable.organizationId, normalizeDenTypeId("organization", provider.organizationId)),
+            eq(schema.ExternalIdentityTable.userId, normalizeDenTypeId("user", user.id)),
+          ))
+          .limit(1);
+        const now = new Date();
+        const existing = existingRows[0] ?? null;
+        const remoteId = pickRemoteIdentity(userInfo);
+        const displayName = maybeString(userInfo.name) ?? maybeString(userInfo.displayName) ?? maybeString(user.name);
+        const email = maybeString(userInfo.email) ?? maybeString(user.email);
+        const payload = {
+          organizationId: normalizeDenTypeId("organization", provider.organizationId),
+          userId: normalizeDenTypeId("user", user.id),
+          source: existing?.scimProviderId ? "scim+sso" : "sso",
+          ssoProviderId: provider.providerId,
+          remoteId,
+          userName: maybeString(userInfo.preferred_username) ?? email,
+          email,
+          displayName,
+          attributesJson: userInfo,
+          active: true,
+          lastSsoLoginAt: now,
+        };
+
+        if (existing) {
+          await db
+            .update(schema.ExternalIdentityTable)
+            .set({
+              ...payload,
+              scimProviderId: existing.scimProviderId,
+              externalId: existing.externalId,
+              nameJson: existing.nameJson,
+              emailsJson: existing.emailsJson,
+              lastScimSyncAt: existing.lastScimSyncAt,
+            })
+            .where(eq(schema.ExternalIdentityTable.id, existing.id));
+          return;
+        }
+
+        await db.insert(schema.ExternalIdentityTable).values({
+          id: createDenTypeId("externalIdentity"),
+          ...payload,
+        });
       },
     }),
     apiKey({

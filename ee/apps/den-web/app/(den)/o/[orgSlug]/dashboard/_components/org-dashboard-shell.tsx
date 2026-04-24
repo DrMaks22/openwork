@@ -35,6 +35,7 @@ import {
   getOrgSettingsRoute,
   getMarketplacesRoute,
   getPluginsRoute,
+  getSsoRoute,
   getScimRoute,
   getSharedSetupsRoute,
   getSkillHubsRoute,
@@ -113,6 +114,9 @@ function getDashboardPageTitle(pathname: string, orgSlug: string | null) {
   }
   if (pathname.startsWith(getScimRoute(orgSlug))) {
     return "SCIM";
+  }
+  if (pathname.startsWith(getSsoRoute(orgSlug))) {
+    return "SSO";
   }
   if (pathname.startsWith(getBackgroundAgentsRoute(orgSlug))) {
     return "Shared Workspaces";
@@ -227,6 +231,13 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
       ? [{
           href: activeOrg ? getScimRoute(activeOrg.slug) : "#",
           label: "SCIM",
+          icon: Shield,
+        }]
+      : []),
+    ...(access.canManageSso
+      ? [{
+          href: activeOrg ? getSsoRoute(activeOrg.slug) : "#",
+          label: "SSO",
           icon: Shield,
         }]
       : []),

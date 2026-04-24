@@ -113,6 +113,25 @@ export type DenOrgScimConnection = {
   updatedAt: string | null;
 };
 
+export type DenOrgSsoConnection = {
+  id: string;
+  providerId: string;
+  kind: "oidc" | "saml";
+  issuer: string;
+  domain: string;
+  status: string;
+  signInPath: string;
+  signInUrl: string;
+  redirectUrl: string;
+  acsUrl: string | null;
+  metadataUrl: string | null;
+  domainVerified: boolean;
+  lastTestedAt: string | null;
+  lastError: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
 export type DenOrgContext = {
   organization: {
     id: string;
@@ -255,6 +274,7 @@ export function getOrgAccessFlags(roleValue: string, isOwner: boolean) {
     canManageTeams: isAdmin,
     canManageApiKeys: isAdmin,
     canManageScim: isAdmin,
+    canManageSso: isAdmin,
   };
 }
 
@@ -324,6 +344,10 @@ export function getApiKeysRoute(orgSlug?: string | null): string {
 
 export function getScimRoute(orgSlug?: string | null): string {
   return `${getOrgDashboardRoute(orgSlug)}/scim`;
+}
+
+export function getSsoRoute(orgSlug?: string | null): string {
+  return `${getOrgDashboardRoute(orgSlug)}/sso`;
 }
 
 export function getSkillHubsRoute(orgSlug?: string | null): string {
@@ -761,4 +785,52 @@ export function parseOrgScimPayload(payload: unknown): {
     connection,
     scimToken: asString(payload.scimToken),
   };
+}
+
+export function parseOrgSsoPayload(payload: unknown): {
+  connection: DenOrgSsoConnection | null;
+} {
+  if (!isRecord(payload)) {
+    return { connection: null };
+  }
+
+  const rawConnection = isRecord(payload.connection) ? payload.connection : null;
+  const connection = rawConnection
+    ? (() => {
+        const id = asString(rawConnection.id);
+        const providerId = asString(rawConnection.providerId);
+        const kind = asString(rawConnection.kind);
+        const issuer = asString(rawConnection.issuer);
+        const domain = asString(rawConnection.domain);
+        const status = asString(rawConnection.status);
+        const signInPath = asString(rawConnection.signInPath);
+        const signInUrl = asString(rawConnection.signInUrl);
+        const redirectUrl = asString(rawConnection.redirectUrl);
+
+        if (!id || !providerId || !issuer || !domain || !status || !signInPath || !signInUrl || !redirectUrl || (kind !== "oidc" && kind !== "saml")) {
+          return null;
+        }
+
+        return {
+          id,
+          providerId,
+          kind,
+          issuer,
+          domain,
+          status,
+          signInPath,
+          signInUrl,
+          redirectUrl,
+          acsUrl: asString(rawConnection.acsUrl),
+          metadataUrl: asString(rawConnection.metadataUrl),
+          domainVerified: asBoolean(rawConnection.domainVerified),
+          lastTestedAt: asIsoString(rawConnection.lastTestedAt),
+          lastError: asString(rawConnection.lastError),
+          createdAt: asIsoString(rawConnection.createdAt),
+          updatedAt: asIsoString(rawConnection.updatedAt),
+        } satisfies DenOrgSsoConnection;
+      })()
+    : null;
+
+  return { connection };
 }

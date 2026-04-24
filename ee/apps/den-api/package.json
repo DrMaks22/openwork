@@ -12,6 +12,7 @@
   "dependencies": {
     "@better-auth/api-key": "^1.5.6",
     "@better-auth/scim": "^1.5.6",
+    "@better-auth/sso": "^1.5.6",
     "@daytonaio/sdk": "^0.150.0",
     "@hono/node-server": "^1.13.8",
     "@hono/standard-validator": "^0.2.2",
