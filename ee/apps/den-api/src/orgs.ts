@@ -612,6 +612,7 @@ export async function updateOrganizationSettings(input: {
   allowedEmailDomains?: readonly string[] | null
   desktopAppRestrictions?: DesktopAppRestrictions
   allowedDesktopVersions?: readonly string[] | null
+  requireSso?: boolean
 }) {
   const nextName = typeof input.name === "string" ? input.name.trim() : null
   if (typeof input.name === "string" && !nextName) {
@@ -628,7 +629,7 @@ export async function updateOrganizationSettings(input: {
   if (input.desktopAppRestrictions !== undefined) {
     updates.desktopAppRestrictions = normalizeDesktopAppRestrictions(input.desktopAppRestrictions)
   }
-  if (input.allowedDesktopVersions !== undefined) {
+  if (input.allowedDesktopVersions !== undefined || input.requireSso !== undefined) {
     const rows = await db
       .select({ metadata: OrganizationTable.metadata })
       .from(OrganizationTable)
@@ -644,10 +645,16 @@ export async function updateOrganizationSettings(input: {
       ...normalizeOrganizationMetadata(existingOrganization.metadata).metadata,
     } as Record<string, unknown>
 
-    if (input.allowedDesktopVersions === null) {
-      delete nextMetadata.allowedDesktopVersions
-    } else {
-      nextMetadata.allowedDesktopVersions = input.allowedDesktopVersions
+    if (input.allowedDesktopVersions !== undefined) {
+      if (input.allowedDesktopVersions === null) {
+        delete nextMetadata.allowedDesktopVersions
+      } else {
+        nextMetadata.allowedDesktopVersions = input.allowedDesktopVersions
+      }
+    }
+
+    if (input.requireSso !== undefined) {
+      nextMetadata.requireSso = input.requireSso
     }
 
     updates.metadata = normalizeOrganizationMetadata(nextMetadata).metadata

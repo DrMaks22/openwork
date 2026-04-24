@@ -167,6 +167,7 @@ export type DenOrgContext = {
 
 export type DenOrganizationMetadata = {
   allowedDesktopVersions?: string[];
+  requireSso?: boolean;
 } & Record<string, unknown>;
 
 export const DEN_ROLE_PERMISSION_OPTIONS = {
@@ -232,6 +233,11 @@ export function getAllowedDesktopVersionsFromMetadata(metadata: string | null): 
   }
 
   return [...new Set(values.map((entry) => normalizeDesktopVersionString(entry)).filter((entry): entry is string => Boolean(entry)))];
+}
+
+export function getRequireSsoFromMetadata(metadata: string | null): boolean {
+  const parsed = parseOrganizationMetadata(metadata);
+  return parsed?.requireSso === true;
 }
 
 function asDesktopAppRestrictions(value: unknown): DenDesktopAppRestrictions {

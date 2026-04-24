@@ -2,6 +2,7 @@ import type { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { z } from "zod"
 import { auth } from "../../auth.js"
+import { env } from "../../env.js"
 import {
   deleteOrganizationSsoConnection,
   getOrganizationSsoConnection,
@@ -88,6 +89,10 @@ const metadataQuerySchema = z.object({
   format: z.enum(["xml", "json"]).default("xml"),
 }).meta({ ref: "OrganizationSsoMetadataQuery" })
 
+const domainVerificationResponseSchema = z.object({
+  domainVerificationToken: z.string().min(1),
+}).meta({ ref: "OrganizationSsoDomainVerificationResponse" })
+
 function serializeConnection(input: {
   connection: NonNullable<Awaited<ReturnType<typeof getOrganizationSsoConnection>>>
   signInUrl: string
@@ -119,7 +124,7 @@ function serializeConnection(input: {
 
 async function buildConnectionPayload(connection: NonNullable<Awaited<ReturnType<typeof getOrganizationSsoConnection>>>, origin: string) {
   const provider = await getSsoProviderForConnection(connection)
-  const signInUrl = new URL(connection.signInPath || getOrganizationSsoSignInPath(""), origin).toString()
+  const signInUrl = new URL(connection.signInPath || getOrganizationSsoSignInPath(""), env.betterAuthUrl).toString()
   const redirectUrl = getSsoOidcRedirectUrl(connection.providerId)
   const acsUrl = connection.kind === "saml" ? getSsoAcsUrl(connection.providerId) : null
   const metadataUrl = connection.kind === "saml" ? getSsoMetadataUrl(connection.providerId) : null
@@ -331,6 +336,104 @@ export function registerOrgSsoRoutes<T extends { Variables: OrgRouteVariables }>
       })
 
       return response
+    },
+  )
+
+  app.post(
+    "/v1/sso/request-domain-verification",
+    describeRoute({
+      tags: ["SSO"],
+      summary: "Request an SSO domain verification token",
+      description: "Returns the DNS TXT verification token for the current organization's SSO provider.",
+      security: [{ bearerAuth: [] }],
+      responses: {
+        201: { description: "Domain verification token returned", content: { "application/json": { schema: resolver(domainVerificationResponseSchema) } } },
+        400: { description: "Invalid request", content: { "application/json": { schema: resolver(invalidRequestSchema) } } },
+        401: { description: "Unauthorized", content: { "application/json": { schema: resolver(unauthorizedSchema) } } },
+        403: { description: "Only workspace owners and admins can manage SSO.", content: { "application/json": { schema: resolver(forbiddenSchema) } } },
+        404: { description: "Organization not found", content: { "application/json": { schema: resolver(organizationNotFoundSchema) } } },
+      },
+    }),
+    requireUserMiddleware,
+    resolveOrganizationContextMiddleware,
+    async (c) => {
+      const access = ensureSsoManager(c)
+      if (!access.ok) {
+        return c.json(access.response, access.response.error === "forbidden" ? 403 : 404)
+      }
+
+      const payload = c.get("organizationContext")
+      const connection = await getOrganizationSsoConnection(payload.organization.id)
+      if (!connection) {
+        return c.json({ error: "organization_not_found" }, 404)
+      }
+
+      let body: { domainVerificationToken?: string } | null = null
+      try {
+        body = await auth.api.requestDomainVerification({
+          body: { providerId: connection.providerId },
+          headers: c.req.raw.headers,
+        })
+      } catch (error) {
+        return c.json({
+          error: "invalid_request",
+          details: [{ message: error instanceof Error ? error.message : "Could not request a domain verification token." }],
+        }, 400)
+      }
+
+      if (!body?.domainVerificationToken) {
+        return c.json({
+          error: "invalid_request",
+          details: [{ message: "Could not request a domain verification token." }],
+        }, 400)
+      }
+
+      return c.json({ domainVerificationToken: body.domainVerificationToken }, 201)
+    },
+  )
+
+  app.post(
+    "/v1/sso/verify-domain",
+    describeRoute({
+      tags: ["SSO"],
+      summary: "Verify the organization SSO domain",
+      description: "Checks the provider's DNS TXT record and marks the domain as verified when present.",
+      security: [{ bearerAuth: [] }],
+      responses: {
+        204: { description: "Organization SSO domain verified" },
+        400: { description: "Invalid request", content: { "application/json": { schema: resolver(invalidRequestSchema) } } },
+        401: { description: "Unauthorized", content: { "application/json": { schema: resolver(unauthorizedSchema) } } },
+        403: { description: "Only workspace owners and admins can manage SSO.", content: { "application/json": { schema: resolver(forbiddenSchema) } } },
+        404: { description: "Organization not found", content: { "application/json": { schema: resolver(organizationNotFoundSchema) } } },
+      },
+    }),
+    requireUserMiddleware,
+    resolveOrganizationContextMiddleware,
+    async (c) => {
+      const access = ensureSsoManager(c)
+      if (!access.ok) {
+        return c.json(access.response, access.response.error === "forbidden" ? 403 : 404)
+      }
+
+      const payload = c.get("organizationContext")
+      const connection = await getOrganizationSsoConnection(payload.organization.id)
+      if (!connection) {
+        return c.json({ error: "organization_not_found" }, 404)
+      }
+
+      try {
+        await auth.api.verifyDomain({
+          body: { providerId: connection.providerId },
+          headers: c.req.raw.headers,
+        })
+      } catch (error) {
+        return c.json({
+          error: "invalid_request",
+          details: [{ message: error instanceof Error ? error.message : "Could not verify the SSO domain." }],
+        }, 400)
+      }
+
+      return c.body(null, 204)
     },
   )
 }

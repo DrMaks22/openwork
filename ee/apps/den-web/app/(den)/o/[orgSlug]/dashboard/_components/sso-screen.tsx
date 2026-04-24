@@ -25,6 +25,9 @@ export function SsoScreen() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [domainVerificationToken, setDomainVerificationToken] = useState<string | null>(null);
+  const [requestingDomainToken, setRequestingDomainToken] = useState(false);
+  const [verifyingDomain, setVerifyingDomain] = useState(false);
   const [formMode, setFormMode] = useState<FormMode>("saml");
   const [issuer, setIssuer] = useState("");
   const [domain, setDomain] = useState("");
@@ -127,6 +130,48 @@ export function SsoScreen() {
       setError(nextError instanceof Error ? nextError.message : "Failed to delete SSO settings.");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleRequestDomainToken() {
+    if (!orgId || !connection) return;
+    setRequestingDomainToken(true);
+    setError(null);
+    try {
+      const { response, payload } = await requestJson("/v1/sso/request-domain-verification", { method: "POST", body: JSON.stringify({}) }, 12000);
+      if (!response.ok) {
+        throw new Error(getErrorMessage(payload, `Failed to request domain verification (${response.status}).`));
+      }
+
+      const token = typeof (payload as { domainVerificationToken?: unknown } | null)?.domainVerificationToken === "string"
+        ? (payload as { domainVerificationToken: string }).domainVerificationToken
+        : "";
+      if (!token) {
+        throw new Error("SSO domain verification token was missing from the response.");
+      }
+      setDomainVerificationToken(token);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to request domain verification.");
+    } finally {
+      setRequestingDomainToken(false);
+    }
+  }
+
+  async function handleVerifyDomain() {
+    if (!orgId || !connection) return;
+    setVerifyingDomain(true);
+    setError(null);
+    try {
+      const { response, payload } = await requestJson("/v1/sso/verify-domain", { method: "POST", body: JSON.stringify({}) }, 12000);
+      if (response.status !== 204 && !response.ok) {
+        throw new Error(getErrorMessage(payload, `Failed to verify domain (${response.status}).`));
+      }
+      setDomainVerificationToken(null);
+      await loadSsoConfig();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to verify the SSO domain.");
+    } finally {
+      setVerifyingDomain(false);
     }
   }
 
@@ -233,6 +278,34 @@ export function SsoScreen() {
                     <p className="mt-2">Updated: {formatDateTime(connection.updatedAt)}</p>
                   </div>
                 </div>
+
+                {!connection.domainVerified ? (
+                  <div className="rounded-[20px] border border-violet-200 bg-violet-50 p-4 text-[14px] text-violet-900">
+                    <p className="font-medium">Domain verification</p>
+                    <p className="mt-2 text-violet-800">
+                      Request a DNS TXT token, publish it for `{connection.domain}`, then verify the domain before using this connection in production.
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <DenButton variant="secondary" icon={KeyRound} onClick={() => void handleRequestDomainToken()} disabled={requestingDomainToken}>
+                        {requestingDomainToken ? "Requesting..." : "Request token"}
+                      </DenButton>
+                      <DenButton variant="secondary" icon={RefreshCw} onClick={() => void handleVerifyDomain()} disabled={verifyingDomain}>
+                        {verifyingDomain ? "Verifying..." : "Verify domain"}
+                      </DenButton>
+                    </div>
+                    {domainVerificationToken ? (
+                      <div className="mt-4 rounded-[16px] border border-violet-200 bg-white px-4 py-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-violet-500">TXT token</p>
+                          <DenButton variant="secondary" icon={Copy} onClick={() => void copyValue(domainVerificationToken, "domain-token")}>
+                            {copiedValue === "domain-token" ? "Copied" : "Copy"}
+                          </DenButton>
+                        </div>
+                        <code className="block break-all text-[13px] leading-6 text-gray-700">{domainVerificationToken}</code>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {connection.lastError ? <div className="rounded-[20px] border border-red-200 bg-red-50 p-4 text-[14px] text-red-700">{connection.lastError}</div> : null}
               </div>

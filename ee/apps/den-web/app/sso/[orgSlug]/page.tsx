@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
-export default function OrganizationSsoSignInPage({ params }: { params: { orgSlug: string } }) {
+export default function OrganizationSsoSignInPage() {
+  const params = useParams<{ orgSlug: string }>();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const orgSlug = typeof params?.orgSlug === "string" ? params.orgSlug : "";
 
   const callbackURL = useMemo(() => searchParams.get("callbackURL") || "/dashboard", [searchParams]);
   const loginHint = useMemo(() => searchParams.get("loginHint") || undefined, [searchParams]);
@@ -23,7 +25,7 @@ export default function OrganizationSsoSignInPage({ params }: { params: { orgSlu
           },
           credentials: "include",
           body: JSON.stringify({
-            organizationSlug: params.orgSlug,
+            organizationSlug: orgSlug,
             callbackURL,
             loginHint,
           }),
@@ -52,7 +54,7 @@ export default function OrganizationSsoSignInPage({ params }: { params: { orgSlu
     return () => {
       cancelled = true;
     };
-  }, [callbackURL, loginHint, params.orgSlug]);
+  }, [callbackURL, loginHint, orgSlug]);
 
   return (
     <main className="min-h-screen bg-[#0B1020] px-6 py-20 text-white">
@@ -60,7 +62,7 @@ export default function OrganizationSsoSignInPage({ params }: { params: { orgSlu
         <p className="text-[12px] font-semibold uppercase tracking-[0.24em] text-violet-200">Enterprise SSO</p>
         <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">Signing you in</h1>
         <p className="mt-3 text-[15px] leading-7 text-white/70">
-          Redirecting to your organization&apos;s identity provider for `{params.orgSlug}`.
+          Redirecting to your organization&apos;s identity provider for `{orgSlug}`.
         </p>
         {error ? (
           <div className="mt-6 rounded-[20px] border border-red-400/40 bg-red-500/10 px-4 py-3 text-[14px] text-red-100">

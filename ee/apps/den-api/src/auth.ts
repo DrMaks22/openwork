@@ -285,6 +285,9 @@ export const auth = betterAuth({
     sso({
       providersLimit: 1000,
       provisionUserOnEveryLogin: true,
+      domainVerification: {
+        enabled: true,
+      },
       organizationProvisioning: {
         disabled: false,
         defaultRole: "member",

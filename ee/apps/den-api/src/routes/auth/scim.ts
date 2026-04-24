@@ -3,7 +3,8 @@ import type { Hono } from "hono"
 import { resolver } from "hono-openapi"
 import { normalizeDenTypeId } from "@openwork-ee/utils/typeid"
 import { z } from "zod"
-import { deleteScimProvisionedAccess } from "../../scim.js"
+import { auth } from "../../auth.js"
+import { deleteScimProvisionedAccess, syncExternalIdentityFromScimResource, syncExternalIdentityFromScimUserId } from "../../scim.js"
 import type { AuthContextVariables } from "../../session.js"
 
 const scimErrorSchema = z.object({
@@ -19,6 +20,36 @@ function readBearerToken(headers: Headers) {
   const header = headers.get("authorization")?.trim() ?? ""
   const match = header.match(/^Bearer\s+(.+)$/i)
   return match?.[1]?.trim() ?? null
+}
+
+async function syncScimMutationFromResponse(input: {
+  bearerToken: string
+  response: Response
+  fallbackUserId?: string
+}) {
+  if (!input.response.ok) {
+    return
+  }
+
+  if (input.response.status === 204 && input.fallbackUserId) {
+    try {
+      await syncExternalIdentityFromScimUserId({
+        bearerToken: input.bearerToken,
+        userId: normalizeDenTypeId("user", input.fallbackUserId),
+      })
+    } catch {}
+    return
+  }
+
+  const payload = await input.response.clone().json().catch(() => null) as Record<string, unknown> | null
+  if (!payload) {
+    return
+  }
+
+  await syncExternalIdentityFromScimResource({
+    bearerToken: input.bearerToken,
+    resource: payload,
+  })
 }
 
 export function registerScimAuthRoutes<T extends { Variables: AuthContextVariables }>(app: Hono<T>) {
@@ -160,9 +191,16 @@ export function registerScimAuthRoutes<T extends { Variables: AuthContextVariabl
         return c.json({ detail: "SCIM token is required" }, 401)
       }
 
+      let normalizedUserId
+      try {
+        normalizedUserId = normalizeDenTypeId("user", c.req.param("userId"))
+      } catch {
+        return c.json({ detail: "User not found" }, 404)
+      }
+
       const deleted = await deleteScimProvisionedAccess({
         bearerToken,
-        userId: normalizeDenTypeId("user", c.req.param("userId")),
+        userId: normalizedUserId,
       })
 
       if (!deleted.ok) {
@@ -172,4 +210,23 @@ export function registerScimAuthRoutes<T extends { Variables: AuthContextVariabl
       return c.body(null, 204)
     },
   )
+
+  const handleScimMutation = async (c: { req: { raw: Request; param: (key: string) => string } }) => {
+    const bearerToken = readBearerToken(c.req.raw.headers)
+    const response = await auth.handler(c.req.raw)
+    if (!bearerToken) {
+      return response
+    }
+
+    await syncScimMutationFromResponse({
+      bearerToken,
+      response,
+      fallbackUserId: c.req.param("userId") || undefined,
+    })
+    return response
+  }
+
+  app.post("/api/auth/scim/v2/Users", async (c) => handleScimMutation(c))
+  app.put("/api/auth/scim/v2/Users/:userId", async (c) => handleScimMutation(c))
+  app.patch("/api/auth/scim/v2/Users/:userId", async (c) => handleScimMutation(c))
 }
