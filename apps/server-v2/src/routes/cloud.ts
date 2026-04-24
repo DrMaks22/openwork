@@ -14,9 +14,20 @@ import {
   cloudLlmProviderConnectionResponseSchema,
   cloudLlmProviderListResponseSchema,
   cloudMeResponseSchema,
+  cloudOrgSkillCreateRequestSchema,
+  cloudOrgSkillCreateResponseSchema,
+  cloudOrgSkillHubAddSkillRequestSchema,
+  cloudOrgSkillHubAddSkillResponseSchema,
+  cloudOrgSkillHubListResponseSchema,
+  cloudOrgSkillListResponseSchema,
   cloudOrganizationsResponseSchema,
   cloudSetActiveOrganizationRequestSchema,
   cloudSetActiveOrganizationResponseSchema,
+  cloudTemplateCreateRequestSchema,
+  cloudTemplateListResponseSchema,
+  cloudTemplateResponseSchema,
+  cloudWorkerListResponseSchema,
+  cloudWorkerTokensResponseSchema,
   workspaceCloudProviderMutationResponseSchema,
   workspaceCloudProviderStateResponseSchema,
   workspaceCloudProviderSyncResponseSchema,
@@ -145,6 +156,206 @@ export function registerCloudRoutes(app: Hono<AppBindings>) {
       try {
         const llmProviderId = c.req.param("llmProviderId") ?? "";
         return c.json({ llmProvider: await getRequestContext(c).services.cloud.getLlmProviderConnection(llmProviderId) });
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.get(
+    routePaths.v1.workers,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "List cloud workers",
+      description: "Returns the active-organization worker list through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud workers returned successfully.", cloudWorkerListResponseSchema),
+        401: jsonResponse("Cloud signin is required to list workers.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to list cloud workers.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        const limit = Number.parseInt(new URL(c.req.url).searchParams.get("limit") ?? "20", 10);
+        return c.json(await getRequestContext(c).services.cloud.listWorkers(Number.isFinite(limit) ? limit : 20));
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.post(
+    routePaths.v1.workerTokens(),
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "Get cloud worker tokens",
+      description: "Returns connect tokens for one active-organization worker through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud worker tokens returned successfully.", cloudWorkerTokensResponseSchema),
+        401: jsonResponse("Cloud signin is required to read worker tokens.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to read cloud worker tokens.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        const workerId = c.req.param("workerId") ?? "";
+        return c.json(await getRequestContext(c).services.cloud.getWorkerTokens(workerId));
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.get(
+    routePaths.v1.templates,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "List cloud templates",
+      description: "Returns the active-organization templates through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud templates returned successfully.", cloudTemplateListResponseSchema),
+        401: jsonResponse("Cloud signin is required to list templates.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to list cloud templates.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        return c.json(await getRequestContext(c).services.cloud.listTemplates());
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.post(
+    routePaths.v1.templates,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "Create a cloud template",
+      description: "Creates an active-organization template through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud template created successfully.", cloudTemplateResponseSchema),
+        400: jsonResponse("The template creation payload was invalid.", cloudCompatErrorSchema),
+        401: jsonResponse("Cloud signin is required to create templates.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to create the cloud template.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        const body = await parseJsonBody(cloudTemplateCreateRequestSchema, c.req.raw);
+        return c.json(await getRequestContext(c).services.cloud.createTemplate(body));
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.delete(
+    routePaths.v1.templateById(),
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "Delete a cloud template",
+      description: "Deletes one active-organization template through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud template deleted successfully.", cloudCompatErrorSchema),
+        401: jsonResponse("Cloud signin is required to delete templates.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to delete the cloud template.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        const templateId = c.req.param("templateId") ?? "";
+        await getRequestContext(c).services.cloud.deleteTemplate(templateId);
+        return c.json({ ok: true });
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.get(
+    routePaths.v1.skills,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "List cloud skills",
+      description: "Returns the active-organization shared skill list through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud skills returned successfully.", cloudOrgSkillListResponseSchema),
+        401: jsonResponse("Cloud signin is required to list skills.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to list cloud skills.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        return c.json(await getRequestContext(c).services.cloud.listOrgSkills());
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.post(
+    routePaths.v1.skills,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "Create a cloud skill",
+      description: "Creates an active-organization skill through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud skill created successfully.", cloudOrgSkillCreateResponseSchema),
+        400: jsonResponse("The skill creation payload was invalid.", cloudCompatErrorSchema),
+        401: jsonResponse("Cloud signin is required to create skills.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to create the cloud skill.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        const body = await parseJsonBody(cloudOrgSkillCreateRequestSchema, c.req.raw);
+        return c.json(await getRequestContext(c).services.cloud.createOrgSkill(body));
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.get(
+    routePaths.v1.skillHubs,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "List cloud skill hubs",
+      description: "Returns the active-organization skill hubs through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud skill hubs returned successfully.", cloudOrgSkillHubListResponseSchema),
+        401: jsonResponse("Cloud signin is required to list skill hubs.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to list cloud skill hubs.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        return c.json(await getRequestContext(c).services.cloud.listOrgSkillHubs());
+      } catch (error) {
+        return respondWithCompatError(c, error);
+      }
+    },
+  );
+
+  app.post(
+    routePaths.v1.skillHubAddSkill(),
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "Add a skill to a cloud skill hub",
+      description: "Adds an active-organization skill to one skill hub through Server V2.",
+      responses: {
+        200: jsonResponse("Cloud skill added to hub successfully.", cloudOrgSkillHubAddSkillResponseSchema),
+        400: jsonResponse("The hub skill payload was invalid.", cloudCompatErrorSchema),
+        401: jsonResponse("Cloud signin is required to mutate skill hubs.", cloudCompatErrorSchema),
+        500: jsonResponse("The server failed to add the cloud skill to the hub.", cloudCompatErrorSchema),
+      },
+    }),
+    async (c) => {
+      try {
+        const skillHubId = c.req.param("skillHubId") ?? "";
+        const body = await parseJsonBody(cloudOrgSkillHubAddSkillRequestSchema, c.req.raw);
+        return c.json(await getRequestContext(c).services.cloud.addOrgSkillToHub(skillHubId, body.skillId));
       } catch (error) {
         return respondWithCompatError(c, error);
       }

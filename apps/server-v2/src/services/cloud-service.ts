@@ -9,7 +9,14 @@ import {
   cloudLlmProviderConnectionResponseSchema,
   cloudLlmProviderListResponseSchema,
   cloudMeResponseSchema,
+  cloudOrgSkillCreateResponseSchema,
+  cloudOrgSkillHubListResponseSchema,
+  cloudOrgSkillListResponseSchema,
   cloudOrganizationsResponseSchema,
+  cloudTemplateListResponseSchema,
+  cloudTemplateResponseSchema,
+  cloudWorkerListResponseSchema,
+  cloudWorkerTokensResponseSchema,
   type CloudAppVersionResponse,
   type CloudDesktopConfig,
   type CloudDesktopHandoffExchangeResponse,
@@ -540,6 +547,96 @@ export function createCloudService(input: {
         token: requireToken(),
       });
       return cloudLlmProviderConnectionResponseSchema.parse(payload).llmProvider;
+    },
+
+    async listWorkers(limit = 20) {
+      const query = new URLSearchParams();
+      query.set("limit", String(limit));
+      const payload = await requestCloud(`/v1/workers?${query.toString()}`, {
+        token: requireToken(),
+      });
+      const parsed = isRecord(payload) && Array.isArray(payload.workers)
+        ? {
+            workers: payload.workers.map((entry) => {
+              const record = isRecord(entry) ? entry : {};
+              const instance = isRecord(record.instance) ? record.instance : null;
+              return {
+                workerId: typeof record.id === "string" ? record.id : "",
+                workerName: typeof record.name === "string" ? record.name : "",
+                status: typeof record.status === "string" ? record.status : "unknown",
+                instanceUrl: instance && typeof instance.url === "string" ? instance.url : null,
+                provider: instance && typeof instance.provider === "string" ? instance.provider : null,
+                isMine: Boolean(record.isMine),
+                createdAt: typeof record.createdAt === "string" ? record.createdAt : null,
+              };
+            }),
+          }
+        : payload;
+      return cloudWorkerListResponseSchema.parse(parsed);
+    },
+
+    async getWorkerTokens(workerId: string) {
+      const payload = await requestCloud(`/v1/workers/${encodeURIComponent(workerId)}/tokens`, {
+        body: {},
+        method: "POST",
+        token: requireToken(),
+      });
+      return cloudWorkerTokensResponseSchema.parse(payload);
+    },
+
+    async listTemplates() {
+      const payload = await requestCloud("/v1/templates", {
+        token: requireToken(),
+      });
+      return cloudTemplateListResponseSchema.parse(payload);
+    },
+
+    async createTemplate(inputValue: { name: string; templateData: unknown }) {
+      const payload = await requestCloud("/v1/templates", {
+        body: inputValue,
+        method: "POST",
+        token: requireToken(),
+      });
+      return cloudTemplateResponseSchema.parse(payload);
+    },
+
+    async deleteTemplate(templateId: string) {
+      await requestCloud(`/v1/templates/${encodeURIComponent(templateId)}`, {
+        method: "DELETE",
+        token: requireToken(),
+      });
+      return null;
+    },
+
+    async listOrgSkills() {
+      const payload = await requestCloud("/v1/skills", {
+        token: requireToken(),
+      });
+      return cloudOrgSkillListResponseSchema.parse(payload);
+    },
+
+    async listOrgSkillHubs() {
+      const payload = await requestCloud("/v1/skill-hubs", {
+        token: requireToken(),
+      });
+      return cloudOrgSkillHubListResponseSchema.parse(payload);
+    },
+
+    async createOrgSkill(inputValue: { shared?: "org" | "public" | null; skillText: string }) {
+      const payload = await requestCloud("/v1/skills", {
+        body: inputValue,
+        method: "POST",
+        token: requireToken(),
+      });
+      return cloudOrgSkillCreateResponseSchema.parse(payload);
+    },
+
+    async addOrgSkillToHub(skillHubId: string, skillId: string) {
+      return await requestCloud(`/v1/skill-hubs/${encodeURIComponent(skillHubId)}/skills`, {
+        body: { skillId },
+        method: "POST",
+        token: requireToken(),
+      });
     },
 
     async getAppVersionMetadata(): Promise<CloudAppVersionResponse> {

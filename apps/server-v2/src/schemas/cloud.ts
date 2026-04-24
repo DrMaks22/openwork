@@ -116,6 +116,103 @@ export const cloudLlmProviderConnectionResponseSchema = z.object({
   llmProvider: cloudLlmProviderConnectionSchema,
 }).meta({ ref: "OpenWorkServerV2CloudLlmProviderConnectionResponse" });
 
+export const cloudWorkerSummarySchema = z.object({
+  workerId: z.string().min(1),
+  workerName: z.string().min(1),
+  status: z.string().min(1),
+  instanceUrl: nullableString,
+  provider: nullableString,
+  isMine: z.boolean(),
+  createdAt: nullableString,
+}).meta({ ref: "OpenWorkServerV2CloudWorkerSummary" });
+
+export const cloudWorkerListResponseSchema = z.object({
+  workers: z.array(cloudWorkerSummarySchema),
+}).meta({ ref: "OpenWorkServerV2CloudWorkerListResponse" });
+
+export const cloudWorkerTokensResponseSchema = z.object({
+  tokens: z.object({
+    client: nullableString,
+    owner: nullableString,
+    host: nullableString,
+  }).passthrough(),
+  connect: z.object({
+    openworkUrl: nullableString.optional(),
+    workspaceId: nullableString.optional(),
+  }).passthrough().optional(),
+}).passthrough().meta({ ref: "OpenWorkServerV2CloudWorkerTokensResponse" });
+
+export const cloudTemplateCreatorSchema = z.object({
+  memberId: z.string().min(1),
+  role: z.enum(["owner", "admin", "member"]),
+  userId: z.string().min(1),
+  name: nullableString,
+  email: nullableString,
+  image: nullableString,
+}).meta({ ref: "OpenWorkServerV2CloudTemplateCreator" });
+
+export const cloudTemplateSchema = z.object({
+  id: z.string().min(1),
+  organizationId: z.string().min(1),
+  name: z.string().min(1),
+  templateData: z.unknown(),
+  createdAt: nullableString,
+  updatedAt: nullableString,
+  creator: cloudTemplateCreatorSchema.nullable(),
+}).meta({ ref: "OpenWorkServerV2CloudTemplate" });
+
+export const cloudTemplateListResponseSchema = z.object({
+  templates: z.array(cloudTemplateSchema),
+}).meta({ ref: "OpenWorkServerV2CloudTemplateListResponse" });
+
+export const cloudTemplateResponseSchema = z.object({
+  template: cloudTemplateSchema,
+}).meta({ ref: "OpenWorkServerV2CloudTemplateResponse" });
+
+export const cloudTemplateCreateRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  templateData: z.unknown(),
+}).meta({ ref: "OpenWorkServerV2CloudTemplateCreateRequest" });
+
+export const cloudOrgSkillSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: nullableString,
+  skillText: z.string().min(1),
+  hubName: nullableString.optional(),
+  shared: z.enum(["org", "public"]).nullable(),
+  updatedAt: nullableString,
+}).meta({ ref: "OpenWorkServerV2CloudOrgSkill" });
+
+export const cloudOrgSkillListResponseSchema = z.object({
+  skills: z.array(cloudOrgSkillSchema),
+}).meta({ ref: "OpenWorkServerV2CloudOrgSkillListResponse" });
+
+export const cloudOrgSkillHubSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  skills: z.array(cloudOrgSkillSchema),
+}).meta({ ref: "OpenWorkServerV2CloudOrgSkillHub" });
+
+export const cloudOrgSkillHubListResponseSchema = z.object({
+  skillHubs: z.array(cloudOrgSkillHubSchema),
+}).meta({ ref: "OpenWorkServerV2CloudOrgSkillHubListResponse" });
+
+export const cloudOrgSkillCreateRequestSchema = z.object({
+  skillText: z.string().min(1),
+  shared: z.enum(["org", "public"]).nullable().optional(),
+}).meta({ ref: "OpenWorkServerV2CloudOrgSkillCreateRequest" });
+
+export const cloudOrgSkillCreateResponseSchema = z.object({
+  id: z.string().min(1),
+}).passthrough().meta({ ref: "OpenWorkServerV2CloudOrgSkillCreateResponse" });
+
+export const cloudOrgSkillHubAddSkillRequestSchema = z.object({
+  skillId: z.string().trim().min(1),
+}).meta({ ref: "OpenWorkServerV2CloudOrgSkillHubAddSkillRequest" });
+
+export const cloudOrgSkillHubAddSkillResponseSchema = z.object({}).passthrough().meta({ ref: "OpenWorkServerV2CloudOrgSkillHubAddSkillResponse" });
+
 export const workspaceImportedCloudProviderSchema = z.object({
   cloudProviderId: z.string().min(1),
   providerId: z.string().min(1),

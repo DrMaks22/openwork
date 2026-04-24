@@ -120,6 +120,15 @@ test("openapi route is generated from the live Hono app", async () => {
   expect(document.paths["/system/runtime/versions"].get.operationId).toBe("getSystemRuntimeVersions");
   expect(document.paths["/system/runtime/upgrade"].post.operationId).toBe("postSystemRuntimeUpgrade");
   expect(document.paths["/v1/app-version"].get.operationId).toBe("getV1AppVersion");
+  expect(document.paths["/v1/workers"].get.operationId).toBe("getV1Workers");
+  expect(document.paths["/v1/workers/{workerId}/tokens"].post.operationId).toBe("postV1WorkersByWorkerIdTokens");
+  expect(document.paths["/v1/templates"].get.operationId).toBe("getV1Templates");
+  expect(document.paths["/v1/templates"].post.operationId).toBe("postV1Templates");
+  expect(document.paths["/v1/templates/{templateId}"].delete.operationId).toBe("deleteV1TemplatesByTemplateId");
+  expect(document.paths["/v1/skills"].get.operationId).toBe("getV1Skills");
+  expect(document.paths["/v1/skills"].post.operationId).toBe("postV1Skills");
+  expect(document.paths["/v1/skill-hubs"].get.operationId).toBe("getV1SkillHubs");
+  expect(document.paths["/v1/skill-hubs/{skillHubId}/skills"].post.operationId).toBe("postV1SkillHubsBySkillHubIdSkills");
   expect(document.paths["/v1/llm-providers"].get.operationId).toBe("getV1LlmProviders");
   expect(document.paths["/v1/llm-providers/{llmProviderId}/connect"].get.operationId).toBe("getV1LlmProvidersByLlmProviderIdConnect");
   expect(document.paths["/system/cloud/bootstrap"].get.operationId).toBe("getSystemCloudBootstrap");
@@ -159,8 +168,9 @@ test("cloud compatibility routes proxy and persist cloud state through server-v2
     userId: null,
   });
 
-  globalThis.fetch = (async (input) => {
+  globalThis.fetch = (async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
+    const method = init?.method ?? (typeof input === "string" || input instanceof URL ? "GET" : input.method ?? "GET");
     if (url.pathname === "/api/den/v1/app-version") {
       return new Response(JSON.stringify({ latestAppVersion: "0.11.212", minAppVersion: "0.11.207" }), {
         headers: { "Content-Type": "application/json" },
@@ -195,6 +205,46 @@ test("cloud compatibility routes proxy and persist cloud state through server-v2
         headers: { "Content-Type": "application/json" },
       });
     }
+    if (url.pathname === "/api/den/v1/workers") {
+      return new Response(JSON.stringify({
+        workers: [{ id: "worker_1", name: "Worker One", status: "ready", instance: { url: "https://worker.example.com", provider: "daytona" }, isMine: true, createdAt: "2026-04-23T00:00:00.000Z" }],
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/workers/worker_1/tokens") {
+      return new Response(JSON.stringify({
+        tokens: { client: "client-token", owner: "owner-token", host: "host-token" },
+        connect: { openworkUrl: "https://worker.example.com", workspaceId: "ws_remote_1" },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/templates" && method === "GET") {
+      return new Response(JSON.stringify({
+        templates: [{ id: "tpl_1", organizationId: "org_1", name: "Starter", templateData: { preset: "starter" }, createdAt: null, updatedAt: null, creator: null }],
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/templates" && method === "POST") {
+      return new Response(JSON.stringify({
+        template: { id: "tpl_2", organizationId: "org_1", name: "Created", templateData: { preset: "new" }, createdAt: null, updatedAt: null, creator: null },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/templates/tpl_2") {
+      return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/skills" && method === "GET") {
+      return new Response(JSON.stringify({
+        skills: [{ id: "skill_1", title: "Org Skill", description: null, skillText: "hello", shared: "org", updatedAt: null }],
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/skills" && method === "POST") {
+      return new Response(JSON.stringify({ id: "skill_2" }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/skill-hubs") {
+      return new Response(JSON.stringify({
+        skillHubs: [{ id: "hub_1", name: "Hub One", skills: [{ id: "skill_1", title: "Org Skill", description: null, skillText: "hello", shared: "org", updatedAt: null }] }],
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/skill-hubs/hub_1/skills") {
+      return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
+    }
     if (url.pathname === "/api/auth/organization/set-active") {
       return new Response(JSON.stringify({ ok: true }), {
         headers: { "Content-Type": "application/json" },
@@ -204,11 +254,16 @@ test("cloud compatibility routes proxy and persist cloud state through server-v2
   }) as typeof fetch;
 
   try {
-    const [versionResponse, meResponse, orgsResponse, desktopConfigResponse] = await Promise.all([
+    const [versionResponse, meResponse, orgsResponse, desktopConfigResponse, workersResponse, workerTokensResponse, templatesResponse, skillsResponse, skillHubsResponse] = await Promise.all([
       app.request("http://openwork.local/v1/app-version"),
       app.request("http://openwork.local/v1/me"),
       app.request("http://openwork.local/v1/me/orgs"),
       app.request("http://openwork.local/v1/me/desktop-config"),
+      app.request("http://openwork.local/v1/workers?limit=20"),
+      app.request("http://openwork.local/v1/workers/worker_1/tokens", { method: "POST" }),
+      app.request("http://openwork.local/v1/templates"),
+      app.request("http://openwork.local/v1/skills"),
+      app.request("http://openwork.local/v1/skill-hubs"),
     ]);
 
     expect(versionResponse.status).toBe(200);
@@ -219,6 +274,44 @@ test("cloud compatibility routes proxy and persist cloud state through server-v2
     expect(await orgsResponse.json()).toMatchObject({ activeOrgId: "org_1", activeOrgSlug: "alpha" });
     expect(desktopConfigResponse.status).toBe(200);
     expect(await desktopConfigResponse.json()).toMatchObject({ blockZenModel: true, disallowNonCloudModels: true });
+    expect(workersResponse.status).toBe(200);
+    expect(await workersResponse.json()).toMatchObject({ workers: [{ workerId: "worker_1", workerName: "Worker One" }] });
+    expect(workerTokensResponse.status).toBe(200);
+    expect(await workerTokensResponse.json()).toMatchObject({ tokens: { client: "client-token" } });
+    expect(templatesResponse.status).toBe(200);
+    expect(await templatesResponse.json()).toMatchObject({ templates: [{ id: "tpl_1", name: "Starter" }] });
+    expect(skillsResponse.status).toBe(200);
+    expect(await skillsResponse.json()).toMatchObject({ skills: [{ id: "skill_1", title: "Org Skill" }] });
+    expect(skillHubsResponse.status).toBe(200);
+    expect(await skillHubsResponse.json()).toMatchObject({ skillHubs: [{ id: "hub_1", name: "Hub One" }] });
+
+    const createTemplateResponse = await app.request("http://openwork.local/v1/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Created", templateData: { preset: "new" } }),
+    });
+    expect(createTemplateResponse.status).toBe(200);
+    expect(await createTemplateResponse.json()).toMatchObject({ template: { id: "tpl_2", name: "Created" } });
+
+    const deleteTemplateResponse = await app.request("http://openwork.local/v1/templates/tpl_2", { method: "DELETE" });
+    expect(deleteTemplateResponse.status).toBe(200);
+    expect(await deleteTemplateResponse.json()).toMatchObject({ ok: true });
+
+    const createSkillResponse = await app.request("http://openwork.local/v1/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillText: "hello", shared: "org" }),
+    });
+    expect(createSkillResponse.status).toBe(200);
+    expect(await createSkillResponse.json()).toMatchObject({ id: "skill_2" });
+
+    const addSkillToHubResponse = await app.request("http://openwork.local/v1/skill-hubs/hub_1/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillId: "skill_2" }),
+    });
+    expect(addSkillToHubResponse.status).toBe(200);
+    expect(await addSkillToHubResponse.json()).toMatchObject({ ok: true });
 
     const setActiveResponse = await app.request("http://openwork.local/api/auth/organization/set-active", {
       method: "POST",

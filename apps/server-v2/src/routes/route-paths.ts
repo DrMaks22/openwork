@@ -97,6 +97,13 @@ export const routePaths = {
     me: `${routeNamespaces.v1}/me`,
     meDesktopConfig: `${routeNamespaces.v1}/me/desktop-config`,
     meOrgs: `${routeNamespaces.v1}/me/orgs`,
+    skillHubAddSkill: (skillHubId: string = ":skillHubId") => `${routeNamespaces.v1}/skill-hubs/${skillHubId}/skills`,
+    skillHubs: `${routeNamespaces.v1}/skill-hubs`,
+    skills: `${routeNamespaces.v1}/skills`,
+    templateById: (templateId: string = ":templateId") => `${routeNamespaces.v1}/templates/${templateId}`,
+    templates: `${routeNamespaces.v1}/templates`,
+    workerTokens: (workerId: string = ":workerId") => `${routeNamespaces.v1}/workers/${workerId}/tokens`,
+    workers: `${routeNamespaces.v1}/workers`,
   },
   workspaces: {
     base: routeNamespaces.workspaces,
