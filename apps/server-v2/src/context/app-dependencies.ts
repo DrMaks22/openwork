@@ -1,5 +1,6 @@
 import { createAuthService, type AuthService } from "../services/auth-service.js";
 import { createCapabilitiesService, type CapabilitiesService } from "../services/capabilities-service.js";
+import { createCloudService, type CloudService } from "../services/cloud-service.js";
 import { createConfigMaterializationService, type ConfigMaterializationService } from "../services/config-materialization-service.js";
 import { createManagedResourceService, type ManagedResourceService } from "../services/managed-resource-service.js";
 import { createProcessInfoAdapter, type ProcessInfoAdapter } from "../adapters/process-info.js";
@@ -23,9 +24,10 @@ export type AppDependencies = {
   environment: string;
   persistence: ServerPersistence;
   processInfo: ProcessInfoAdapter;
-  services: {
+    services: {
       auth: AuthService;
       capabilities: CapabilitiesService;
+      cloud: CloudService;
       config: ConfigMaterializationService;
       files: WorkspaceFileService;
       managed: ManagedResourceService;
@@ -141,6 +143,12 @@ export function createAppDependencies(overrides: CreateAppDependenciesOverrides 
     serverId: persistence.registry.localServerId,
     workingDirectory: persistence.workingDirectory,
   });
+  const cloud = createCloudService({
+    config,
+    repositories: persistence.repositories,
+    serverId: persistence.registry.localServerId,
+    version,
+  });
   const sessions = createWorkspaceSessionService({
     repositories: persistence.repositories,
     runtime,
@@ -179,6 +187,7 @@ export function createAppDependencies(overrides: CreateAppDependenciesOverrides 
     services: {
       auth,
       capabilities,
+      cloud,
       config,
       files,
       managed,

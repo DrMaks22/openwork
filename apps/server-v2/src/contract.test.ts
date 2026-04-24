@@ -30,6 +30,20 @@ test("openapi generation writes the committed server-v2 contract", async () => {
 
   const openApiContents = await Bun.file(path.join(packageDir, "openapi/openapi.json")).text();
   expect(openApiContents).toContain('"/system/health"');
+  expect(openApiContents).toContain('"/v1/app-version"');
+  expect(openApiContents).toContain('"/v1/llm-providers"');
+  expect(openApiContents).toContain('"/v1/llm-providers/{llmProviderId}/connect"');
+  expect(openApiContents).toContain('"/system/cloud/bootstrap"');
+  expect(openApiContents).toContain('"/dev/log"');
+  expect(openApiContents).toContain('"/v1/me"');
+  expect(openApiContents).toContain('"/v1/me/orgs"');
+  expect(openApiContents).toContain('"/v1/me/desktop-config"');
+  expect(openApiContents).toContain('"/v1/auth/desktop-handoff/exchange"');
+  expect(openApiContents).toContain('"/api/auth/organization/set-active"');
+  expect(openApiContents).toContain('"/workspaces/{workspaceId}/cloud/llm-providers/state"');
+  expect(openApiContents).toContain('"/workspaces/{workspaceId}/cloud/llm-providers/sync"');
+  expect(openApiContents).toContain('"/workspaces/{workspaceId}/cloud/llm-providers/{cloudProviderId}"');
+  expect(openApiContents).toContain('"/workspaces/{workspaceId}/config/disabled-providers"');
   expect(openApiContents).toContain('"getSystemHealth"');
   expect(openApiContents).toContain('"/system/status"');
   expect(openApiContents).toContain('"/system/cloud-signin"');
@@ -50,6 +64,21 @@ test("sdk generation succeeds from the server-v2 openapi document", async () => 
 
   const sdkIndex = await Bun.file(path.join(repoDir, "packages/openwork-server-sdk/generated/index.ts")).text();
   expect(sdkIndex).toContain("getSystemHealth");
+  expect(sdkIndex).toContain("getV1AppVersion");
+  expect(sdkIndex).toContain("getV1LlmProviders");
+  expect(sdkIndex).toContain("getV1LlmProvidersByLlmProviderIdConnect");
+  expect(sdkIndex).toContain("getSystemCloudBootstrap");
+  expect(sdkIndex).toContain("getDevLog");
+  expect(sdkIndex).toContain("postDevLog");
+  expect(sdkIndex).toContain("getV1Me");
+  expect(sdkIndex).toContain("getV1MeOrgs");
+  expect(sdkIndex).toContain("getV1MeDesktopConfig");
+  expect(sdkIndex).toContain("postV1AuthDesktopHandoffExchange");
+  expect(sdkIndex).toContain("postApiAuthOrganizationSetActive");
+  expect(sdkIndex).toContain("getWorkspacesByWorkspaceIdCloudLlmProvidersState");
+  expect(sdkIndex).toContain("postWorkspacesByWorkspaceIdCloudLlmProvidersSync");
+  expect(sdkIndex).toContain("putWorkspacesByWorkspaceIdCloudLlmProvidersByCloudProviderId");
+  expect(sdkIndex).toContain("patchWorkspacesByWorkspaceIdConfigDisabledProviders");
   expect(sdkIndex).toContain("getSystemStatus");
   expect(sdkIndex).toContain("getSystemCloudSignin");
   expect(sdkIndex).toContain("getSystemManagedMcps");

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { HTTPException } from "hono/http-exception";
 import type { ServerRepositories } from "../database/repositories.js";
-import type { JsonObject, ManagedConfigRecord, WorkspaceRecord } from "../database/types.js";
+import type { JsonObject, ManagedConfigRecord, ManagedSource, WorkspaceRecord } from "../database/types.js";
 import type { ServerWorkingDirectory } from "../database/working-directory.js";
 import { ensureWorkspaceConfigDir } from "../database/working-directory.js";
 import { RouteError } from "../http.js";
@@ -603,6 +603,16 @@ export function createConfigMaterializationService(input: {
     };
   }
 
+  function persistWorkspaceConfigState(workspace: WorkspaceRecord, next: { openwork: JsonObject; opencode: JsonObject }) {
+    const canonical = canonicalizeWorkspaceConfigState(workspace, next);
+    input.repositories.workspaceConfigState.upsert({
+      openwork: canonical.openwork,
+      opencode: canonical.opencode,
+      workspaceId: workspace.id,
+    });
+    return materializeWorkspaceSnapshot(workspace.id);
+  }
+
   function materializeSkills(workspace: WorkspaceRecord) {
     const skills = listAssignedSkills(workspace.id);
     const roots = workspaceSkillRoots(workspace);
@@ -752,6 +762,93 @@ export function createConfigMaterializationService(input: {
         workspaceId: workspace.id,
       });
       return materializeWorkspaceSnapshot(workspaceId);
+    },
+
+    updateWorkspaceOpenworkConfig(workspaceId: string, updater: (current: JsonObject) => JsonObject) {
+      const workspace = getWorkspaceOrThrow(workspaceId);
+      ensureWorkspaceLocal(workspace);
+      const current = ensureWorkspaceConfigState(workspace);
+      return persistWorkspaceConfigState(workspace, {
+        openwork: asObject(updater(asObject(current.openwork))),
+        opencode: current.opencode,
+      });
+    },
+
+    listWorkspaceProviderConfigs(workspaceId: string) {
+      const workspace = getWorkspaceOrThrow(workspaceId);
+      ensureWorkspaceLocal(workspace);
+      return listAssignedRecords(workspace.id, "workspaceProviderConfigs", "providerConfigs");
+    },
+
+    setWorkspaceDisabledProviders(workspaceId: string, providerIds: string[]) {
+      const workspace = getWorkspaceOrThrow(workspaceId);
+      ensureWorkspaceLocal(workspace);
+      const current = ensureWorkspaceConfigState(workspace);
+      const nextOpencode = asObject(current.opencode);
+      const nextDisabledProviders = normalizeStringArray(providerIds);
+      if (nextDisabledProviders.length > 0) {
+        nextOpencode.disabled_providers = nextDisabledProviders;
+      } else {
+        delete nextOpencode.disabled_providers;
+      }
+      return persistWorkspaceConfigState(workspace, {
+        openwork: current.openwork,
+        opencode: nextOpencode,
+      });
+    },
+
+    upsertWorkspaceProviderConfig(workspaceId: string, inputValue: {
+      auth?: JsonObject | null;
+      cloudItemId?: string | null;
+      config: JsonObject;
+      displayName: string;
+      key: string;
+      metadata?: JsonObject | null;
+      source?: ManagedSource;
+    }) {
+      const workspace = getWorkspaceOrThrow(workspaceId);
+      ensureWorkspaceLocal(workspace);
+      ensureWorkspaceConfigState(workspace);
+
+      const key = inputValue.key.trim();
+      if (!key) {
+        throw new RouteError(400, "invalid_request", "Provider key is required.");
+      }
+
+      const existing = listAssignedRecords(workspace.id, "workspaceProviderConfigs", "providerConfigs");
+      const upserted = input.repositories.providerConfigs.upsert({
+        auth: inputValue.auth ?? null,
+        cloudItemId: inputValue.cloudItemId ?? null,
+        config: inputValue.config,
+        displayName: inputValue.displayName.trim() || key,
+        id: `provider_${workspace.id}_${key}`,
+        key,
+        metadata: inputValue.metadata ?? null,
+        source: inputValue.source ?? "imported",
+      });
+      const nextIds = dedupeAssignments([
+        ...existing
+          .filter((item) => (item.key ?? item.displayName) !== key)
+          .map((item) => item.id),
+        upserted.id,
+      ]);
+      input.repositories.workspaceProviderConfigs.replaceAssignments(workspace.id, nextIds);
+      return materializeWorkspaceSnapshot(workspace.id);
+    },
+
+    removeWorkspaceProviderConfig(workspaceId: string, providerId: string) {
+      const workspace = getWorkspaceOrThrow(workspaceId);
+      ensureWorkspaceLocal(workspace);
+      ensureWorkspaceConfigState(workspace);
+      const key = providerId.trim();
+      const existing = listAssignedRecords(workspace.id, "workspaceProviderConfigs", "providerConfigs");
+      const nextRecords = existing.filter((item) => (item.key ?? item.displayName) !== key);
+      const removed = existing.find((item) => (item.key ?? item.displayName) === key) ?? null;
+      input.repositories.workspaceProviderConfigs.replaceAssignments(workspace.id, dedupeAssignments(nextRecords.map((item) => item.id)));
+      if (removed) {
+        input.repositories.providerConfigs.deleteById(removed.id);
+      }
+      return materializeWorkspaceSnapshot(workspace.id);
     },
 
     async readRawOpencodeConfig(workspaceId: string, scope: "global" | "project") {

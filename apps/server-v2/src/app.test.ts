@@ -119,6 +119,21 @@ test("openapi route is generated from the live Hono app", async () => {
   expect(document.paths["/system/opencode/health"].get.operationId).toBe("getSystemOpencodeHealth");
   expect(document.paths["/system/runtime/versions"].get.operationId).toBe("getSystemRuntimeVersions");
   expect(document.paths["/system/runtime/upgrade"].post.operationId).toBe("postSystemRuntimeUpgrade");
+  expect(document.paths["/v1/app-version"].get.operationId).toBe("getV1AppVersion");
+  expect(document.paths["/v1/llm-providers"].get.operationId).toBe("getV1LlmProviders");
+  expect(document.paths["/v1/llm-providers/{llmProviderId}/connect"].get.operationId).toBe("getV1LlmProvidersByLlmProviderIdConnect");
+  expect(document.paths["/system/cloud/bootstrap"].get.operationId).toBe("getSystemCloudBootstrap");
+  expect(document.paths["/dev/log"].get.operationId).toBe("getDevLog");
+  expect(document.paths["/dev/log"].post.operationId).toBe("postDevLog");
+  expect(document.paths["/v1/me"].get.operationId).toBe("getV1Me");
+  expect(document.paths["/v1/me/orgs"].get.operationId).toBe("getV1MeOrgs");
+  expect(document.paths["/v1/me/desktop-config"].get.operationId).toBe("getV1MeDesktopConfig");
+  expect(document.paths["/v1/auth/desktop-handoff/exchange"].post.operationId).toBe("postV1AuthDesktopHandoffExchange");
+  expect(document.paths["/api/auth/organization/set-active"].post.operationId).toBe("postApiAuthOrganizationSetActive");
+  expect(document.paths["/workspaces/{workspaceId}/cloud/llm-providers/state"].get.operationId).toBe("getWorkspacesByWorkspaceIdCloudLlmProvidersState");
+  expect(document.paths["/workspaces/{workspaceId}/cloud/llm-providers/sync"].post.operationId).toBe("postWorkspacesByWorkspaceIdCloudLlmProvidersSync");
+  expect(document.paths["/workspaces/{workspaceId}/cloud/llm-providers/{cloudProviderId}"].put.operationId).toBe("putWorkspacesByWorkspaceIdCloudLlmProvidersByCloudProviderId");
+  expect(document.paths["/workspaces/{workspaceId}/config/disabled-providers"].patch.operationId).toBe("patchWorkspacesByWorkspaceIdConfigDisabledProviders");
   expect(document.paths["/system/servers/connect"].post.operationId).toBe("postSystemServersConnect");
   expect(document.paths["/workspaces"].get.operationId).toBe("getWorkspaces");
   expect(document.paths["/workspaces/local"].post.operationId).toBe("postWorkspacesLocal");
@@ -130,6 +145,137 @@ test("openapi route is generated from the live Hono app", async () => {
   expect(document.paths["/workspaces/{workspaceId}/reload-events"].get.operationId).toBe("getWorkspacesByWorkspaceIdReloadEvents");
   expect(document.paths["/workspaces/{workspaceId}/sessions"].get.operationId).toBe("getWorkspacesByWorkspaceIdSessions");
   expect(document.paths["/workspaces/{workspaceId}/events"].get.operationId).toBe("getWorkspacesByWorkspaceIdEvents");
+});
+
+test("cloud compatibility routes proxy and persist cloud state through server-v2", async () => {
+  const originalFetch = globalThis.fetch;
+  const { app, dependencies } = createTestApp();
+
+  dependencies.services.managed.upsertCloudSignin({
+    auth: { authToken: "cloud-token" },
+    cloudBaseUrl: "https://app.openworklabs.com",
+    metadata: null,
+    orgId: null,
+    userId: null,
+  });
+
+  globalThis.fetch = (async (input) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
+    if (url.pathname === "/api/den/v1/app-version") {
+      return new Response(JSON.stringify({ latestAppVersion: "0.11.212", minAppVersion: "0.11.207" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.pathname === "/api/den/v1/me") {
+      return new Response(JSON.stringify({
+        user: { id: "usr_1", email: "omar@example.com", name: "Omar" },
+        session: { id: "ses_1" },
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.pathname === "/api/den/v1/me/orgs") {
+      return new Response(JSON.stringify({
+        orgs: [
+          { id: "org_1", name: "Alpha", slug: "alpha", role: "owner", isActive: true },
+          { id: "org_2", name: "Beta", slug: "beta", role: "member", isActive: false },
+        ],
+        activeOrgId: "org_1",
+        activeOrgSlug: "alpha",
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.pathname === "/api/den/v1/me/desktop-config") {
+      return new Response(JSON.stringify({
+        allowedDesktopVersions: ["0.11.212"],
+        blockZenModel: true,
+        disallowNonCloudModels: true,
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.pathname === "/api/auth/organization/set-active") {
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("Not found", { status: 404 });
+  }) as typeof fetch;
+
+  try {
+    const [versionResponse, meResponse, orgsResponse, desktopConfigResponse] = await Promise.all([
+      app.request("http://openwork.local/v1/app-version"),
+      app.request("http://openwork.local/v1/me"),
+      app.request("http://openwork.local/v1/me/orgs"),
+      app.request("http://openwork.local/v1/me/desktop-config"),
+    ]);
+
+    expect(versionResponse.status).toBe(200);
+    expect(await versionResponse.json()).toMatchObject({ latestAppVersion: "0.11.212", minAppVersion: "0.11.207" });
+    expect(meResponse.status).toBe(200);
+    expect(await meResponse.json()).toMatchObject({ user: { id: "usr_1", email: "omar@example.com" } });
+    expect(orgsResponse.status).toBe(200);
+    expect(await orgsResponse.json()).toMatchObject({ activeOrgId: "org_1", activeOrgSlug: "alpha" });
+    expect(desktopConfigResponse.status).toBe(200);
+    expect(await desktopConfigResponse.json()).toMatchObject({ blockZenModel: true, disallowNonCloudModels: true });
+
+    const setActiveResponse = await app.request("http://openwork.local/api/auth/organization/set-active", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ organizationId: "org_2" }),
+    });
+
+    expect(setActiveResponse.status).toBe(200);
+    expect(await setActiveResponse.json()).toMatchObject({ ok: true, activeOrgId: "org_1", activeOrgSlug: "alpha" });
+    expect(dependencies.persistence.repositories.cloudSignin.getPrimary()?.metadata).toMatchObject({
+      activeOrgName: "Alpha",
+      activeOrgSlug: "alpha",
+      validatedUser: { id: "usr_1", email: "omar@example.com", name: "Omar" },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("cloud bootstrap and dev log routes expose the remaining compatibility surfaces", async () => {
+  const originalDevLog = process.env.OPENWORK_DEV_LOG_FILE;
+  const { app } = createTestApp();
+  const tempLogPath = `/tmp/openwork-server-v2-dev-log-${Math.random().toString(16).slice(2)}.jsonl`;
+  process.env.OPENWORK_DEV_LOG_FILE = tempLogPath;
+
+  try {
+    const bootstrapResponse = await app.request("http://openwork.local/system/cloud/bootstrap");
+    const bootstrapBody = await bootstrapResponse.json();
+    expect(bootstrapResponse.status).toBe(200);
+    expect(bootstrapBody.data).toMatchObject({
+      apiBaseUrl: expect.any(String),
+      baseUrl: expect.any(String),
+      requireSignin: false,
+    });
+
+    const probeResponse = await app.request("http://openwork.local/dev/log");
+    const probeBody = await probeResponse.json();
+    expect(probeResponse.status).toBe(200);
+    expect(probeBody).toMatchObject({ ok: true, path: tempLogPath });
+
+    const appendResponse = await app.request("http://openwork.local/dev/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ scope: "test", value: 1 }]),
+    });
+    const appendBody = await appendResponse.json();
+    expect(appendResponse.status).toBe(200);
+    expect(appendBody).toMatchObject({ ok: true, count: 1 });
+  } finally {
+    if (originalDevLog === undefined) {
+      delete process.env.OPENWORK_DEV_LOG_FILE;
+    } else {
+      process.env.OPENWORK_DEV_LOG_FILE = originalDevLog;
+    }
+  }
 });
 
 test("runtime routes expose the initial server-owned status surfaces", async () => {

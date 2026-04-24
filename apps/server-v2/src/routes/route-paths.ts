@@ -1,10 +1,12 @@
 const WORKSPACE_ID_PARAMETER = ":workspaceId";
 
 export const routeNamespaces = {
+  dev: "/dev",
   root: "/",
   openapi: "/openapi.json",
   system: "/system",
   workspaces: "/workspaces",
+  v1: "/v1",
 } as const;
 
 export function workspaceRoutePath(workspaceId: string = WORKSPACE_ID_PARAMETER) {
@@ -44,10 +46,19 @@ export const workspaceResourcePattern = workspaceRoutePath();
 export const routePaths = {
   root: routeNamespaces.root,
   openapiDocument: routeNamespaces.openapi,
+  api: {
+    auth: {
+      organizationSetActive: "/api/auth/organization/set-active",
+    },
+  },
+  dev: {
+    log: `${routeNamespaces.dev}/log`,
+  },
   system: {
     base: routeNamespaces.system,
     capabilities: `${routeNamespaces.system}/capabilities`,
     cloudSignin: `${routeNamespaces.system}/cloud-signin`,
+    cloudBootstrap: `${routeNamespaces.system}/cloud/bootstrap`,
     health: `${routeNamespaces.system}/health`,
     managed: {
       item: (kind: string, itemId: string = ":itemId") => `${routeNamespaces.system}/managed/${kind}/${itemId}`,
@@ -76,6 +87,17 @@ export const routePaths = {
       versions: `${routeNamespaces.system}/runtime/versions`,
     },
   },
+  v1: {
+    appVersion: `${routeNamespaces.v1}/app-version`,
+    auth: {
+      desktopHandoffExchange: `${routeNamespaces.v1}/auth/desktop-handoff/exchange`,
+    },
+    llmProviderConnect: (llmProviderId: string = ":llmProviderId") => `${routeNamespaces.v1}/llm-providers/${llmProviderId}/connect`,
+    llmProviders: `${routeNamespaces.v1}/llm-providers`,
+    me: `${routeNamespaces.v1}/me`,
+    meDesktopConfig: `${routeNamespaces.v1}/me/desktop-config`,
+    meOrgs: `${routeNamespaces.v1}/me/orgs`,
+  },
   workspaces: {
     base: routeNamespaces.workspaces,
     createLocal: `${routeNamespaces.workspaces}/local`,
@@ -90,6 +112,13 @@ export const routePaths = {
         `${workspaceRoutePath(workspaceId)}/artifacts/${artifactId}`,
     },
     config: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/config`,
+    cloud: {
+      providerImport: (cloudProviderId: string = ":cloudProviderId", workspaceId: string = WORKSPACE_ID_PARAMETER) =>
+        `${workspaceRoutePath(workspaceId)}/cloud/llm-providers/${cloudProviderId}`,
+      providerState: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/cloud/llm-providers/state`,
+      providerSync: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/cloud/llm-providers/sync`,
+    },
+    configDisabledProviders: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/config/disabled-providers`,
     engineReload: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/engine/reload`,
     export: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/export`,
     fileSessions: {

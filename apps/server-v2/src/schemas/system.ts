@@ -131,3 +131,14 @@ export const openApiDocumentSchema = z.object({
   paths: z.record(z.string(), z.unknown()),
   components: z.object({}).passthrough().optional(),
 }).passthrough().meta({ ref: "OpenWorkServerV2OpenApiDocument" });
+
+export const devLogStatusSchema = z.object({
+  ok: z.boolean(),
+  path: z.string().optional(),
+  reason: z.string().optional(),
+}).meta({ ref: "OpenWorkServerV2DevLogStatus" });
+
+export const devLogWriteResponseSchema = z.object({
+  count: z.number().int().nonnegative(),
+  ok: z.literal(true),
+}).meta({ ref: "OpenWorkServerV2DevLogWriteResponse" });

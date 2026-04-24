@@ -1,3 +1,5 @@
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { Hono } from "hono";
 import { describeRoute, openAPIRouteHandler } from "hono-openapi";
 import { HTTPException } from "hono/http-exception";
@@ -13,7 +15,8 @@ import {
   serverInventoryListResponseSchema,
   systemStatusResponseSchema,
 } from "../schemas/registry.js";
-import { healthResponseSchema, metadataResponseSchema, openApiDocumentSchema, rootInfoResponseSchema } from "../schemas/system.js";
+import { cloudBootstrapConfigResponseSchema } from "../schemas/cloud.js";
+import { devLogStatusSchema, devLogWriteResponseSchema, healthResponseSchema, metadataResponseSchema, openApiDocumentSchema, rootInfoResponseSchema } from "../schemas/system.js";
 import { routePaths } from "./route-paths.js";
 
 type ServerV2App = Hono<AppBindings>;
@@ -97,6 +100,10 @@ function createOpenApiDocumentation(version: string) {
         description: "Server-level operational routes and contract metadata.",
       },
       {
+        name: "Cloud",
+        description: "Server-owned cloud compatibility routes and persisted cloud signin state.",
+      },
+      {
         name: "Workspaces",
         description: "Workspace-first resources will live under /workspaces/:workspaceId.",
       },
@@ -126,6 +133,11 @@ function createOpenApiDocumentation(version: string) {
       },
     ],
   };
+}
+
+function resolveDevLogPath(): string | null {
+  const raw = (process.env.OPENWORK_DEV_LOG_FILE ?? "").trim();
+  return raw.length > 0 ? raw : null;
 }
 
 export function registerSystemRoutes(app: ServerV2App, dependencies: AppDependencies) {
@@ -209,6 +221,22 @@ export function registerSystemRoutes(app: ServerV2App, dependencies: AppDependen
       const requestContext = getRequestContext(c);
       requestContext.services.auth.requireVisibleRead(requestContext.actor);
       return c.json(buildSuccessResponse(requestContext.requestId, requestContext.services.system.getStatus(requestContext.actor)));
+    },
+  );
+
+  app.get(
+    routePaths.system.cloudBootstrap,
+    describeRoute({
+      tags: ["Cloud"],
+      summary: "Get cloud bootstrap config",
+      description: "Returns the server-owned cloud bootstrap config that desktop-hosted clients can use for base URL and forced-signin decisions.",
+      responses: withCommonErrorResponses({
+        200: jsonResponse("Cloud bootstrap config returned successfully.", cloudBootstrapConfigResponseSchema),
+      }),
+    }),
+    (c) => {
+      const requestContext = getRequestContext(c);
+      return c.json(buildSuccessResponse(requestContext.requestId, requestContext.services.cloud.getBootstrapConfig()));
     },
   );
 
@@ -315,5 +343,60 @@ export function registerSystemRoutes(app: ServerV2App, dependencies: AppDependen
         },
       },
     }),
+  );
+
+  app.get(
+    routePaths.dev.log,
+    describeRoute({
+      tags: ["System"],
+      summary: "Probe the dev log sink",
+      description: "Returns whether the optional Server V2 dev log sink is enabled for the current process.",
+      responses: withCommonErrorResponses({
+        200: jsonResponse("Dev log sink status returned successfully.", devLogStatusSchema),
+      }),
+    }),
+    (c) => {
+      const target = resolveDevLogPath();
+      if (!target) {
+        return c.json({ ok: false, reason: "dev_log_disabled" });
+      }
+      return c.json({ ok: true, path: target });
+    },
+  );
+
+  app.post(
+    routePaths.dev.log,
+    describeRoute({
+      tags: ["System"],
+      summary: "Append entries to the dev log sink",
+      description: "Appends JSON log entries to the optional Server V2 dev log file for local debugging and automation tooling.",
+      responses: withCommonErrorResponses({
+        200: jsonResponse("Dev log entries appended successfully.", devLogWriteResponseSchema),
+      }, { includeInvalidRequest: true }),
+    }),
+    async (c) => {
+      const target = resolveDevLogPath();
+      if (!target) {
+        return c.json({ ok: false, reason: "dev_log_disabled" });
+      }
+
+      let payload: unknown = null;
+      try {
+        payload = await c.req.json();
+      } catch {
+        return c.json({ error: "invalid_request", message: "Request body must be valid JSON." }, 400);
+      }
+
+      const entries = Array.isArray(payload) ? payload : [payload];
+      await mkdir(dirname(target), { recursive: true });
+      const lines = entries.map((entry) => {
+        if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+          return JSON.stringify({ at: new Date().toISOString(), ...(entry as Record<string, unknown>) });
+        }
+        return JSON.stringify({ at: new Date().toISOString(), value: entry });
+      }).join("\n");
+      await appendFile(target, `${lines}\n`, "utf8");
+      return c.json({ ok: true, count: entries.length });
+    },
   );
 }

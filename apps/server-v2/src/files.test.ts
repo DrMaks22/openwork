@@ -348,3 +348,144 @@ test("reconciliation absorbs recognized managed items from local workspace files
   expect(snapshot.effective.opencode.plugin).toContain("demo-plugin");
   expect((snapshot.effective.opencode.provider as any).openai.options.apiKey).toBe("redacted");
 });
+
+test("workspace cloud provider routes persist imports, disabled providers, and sync state through server-v2", async () => {
+  const originalFetch = globalThis.fetch;
+  const { app, dependencies, root } = createTestApp();
+  const workspaceRoot = path.join(root, "workspace-cloud");
+
+  const createResponse = await app.request("http://openwork.local/workspaces/local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folderPath: workspaceRoot, name: "Cloud", preset: "starter" }),
+  });
+  const created = await createResponse.json();
+  const workspaceId = created.data.id as string;
+
+  dependencies.services.managed.upsertCloudSignin({
+    auth: { authToken: "cloud-token" },
+    cloudBaseUrl: "https://app.openworklabs.com",
+    metadata: null,
+    orgId: "org_1",
+    userId: "usr_1",
+  });
+
+  let includeSecondProvider = false;
+  globalThis.fetch = (async (input) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
+    if (url.pathname === "/api/den/v1/llm-providers") {
+      return new Response(JSON.stringify({
+        llmProviders: [
+          {
+            id: "lp_1",
+            source: "models_dev",
+            providerId: "openai-cloud",
+            name: "OpenAI Cloud",
+            providerConfig: { env: ["OPENAI_API_KEY"], options: { baseUrl: "https://api.openai.com/v1" } },
+            hasApiKey: true,
+            models: [{ id: "gpt-4.1", name: "GPT-4.1", config: { reasoning: { supported: true } }, createdAt: null }],
+            createdAt: null,
+            updatedAt: "2026-04-23T00:00:00.000Z",
+          },
+          ...(includeSecondProvider
+            ? [{
+                id: "lp_2",
+                source: "custom",
+                providerId: "anthropic-cloud",
+                name: "Anthropic Cloud",
+                providerConfig: { env: ["ANTHROPIC_API_KEY"] },
+                hasApiKey: true,
+                models: [{ id: "claude-sonnet", name: "Claude Sonnet", config: {}, createdAt: null }],
+                createdAt: null,
+                updatedAt: "2026-04-23T01:00:00.000Z",
+              }]
+            : []),
+        ],
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/llm-providers/lp_1/connect") {
+      return new Response(JSON.stringify({
+        llmProvider: {
+          id: "lp_1",
+          source: "models_dev",
+          providerId: "openai-cloud",
+          name: "OpenAI Cloud",
+          providerConfig: { env: ["OPENAI_API_KEY"], options: { baseUrl: "https://api.openai.com/v1" } },
+          hasApiKey: true,
+          apiKey: "sk-openai",
+          models: [{ id: "gpt-4.1", name: "GPT-4.1", config: { reasoning: { supported: true } }, createdAt: null }],
+          createdAt: null,
+          updatedAt: "2026-04-23T00:00:00.000Z",
+        },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    if (url.pathname === "/api/den/v1/llm-providers/lp_2/connect") {
+      return new Response(JSON.stringify({
+        llmProvider: {
+          id: "lp_2",
+          source: "custom",
+          providerId: "anthropic-cloud",
+          name: "Anthropic Cloud",
+          providerConfig: { env: ["ANTHROPIC_API_KEY"] },
+          hasApiKey: true,
+          apiKey: "sk-anthropic",
+          models: [{ id: "claude-sonnet", name: "Claude Sonnet", config: {}, createdAt: null }],
+          createdAt: null,
+          updatedAt: "2026-04-23T01:00:00.000Z",
+        },
+      }), { headers: { "Content-Type": "application/json" } });
+    }
+    return new Response("Not found", { status: 404 });
+  }) as typeof fetch;
+
+  try {
+    const listResponse = await app.request("http://openwork.local/v1/llm-providers");
+    const listBody = await listResponse.json();
+    expect(listResponse.status).toBe(200);
+    expect(listBody.llmProviders).toHaveLength(1);
+
+    const importResponse = await app.request(`http://openwork.local/workspaces/${workspaceId}/cloud/llm-providers/lp_1`, {
+      method: "PUT",
+    });
+    const importBody = await importResponse.json();
+    expect(importResponse.status).toBe(200);
+    expect(importBody.data.importedProviders.lp_1.providerId).toBe("openai-cloud");
+    expect((importBody.data.snapshot.effective.opencode.provider as any)["openai-cloud"].models["gpt-4.1"].name).toBe("GPT-4.1");
+    expect(dependencies.persistence.repositories.providerConfigs.getById(`provider_${workspaceId}_openai-cloud`)?.auth).toMatchObject({ key: "sk-openai", type: "api" });
+
+    const disabledResponse = await app.request(`http://openwork.local/workspaces/${workspaceId}/config/disabled-providers`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ disabledProviders: ["demo-provider", "openai-cloud"] }),
+    });
+    const disabledBody = await disabledResponse.json();
+    expect(disabledResponse.status).toBe(200);
+    expect(disabledBody.data.disabledProviders).toEqual(["demo-provider", "openai-cloud"]);
+
+    includeSecondProvider = true;
+    const syncResponse = await app.request(`http://openwork.local/workspaces/${workspaceId}/cloud/llm-providers/sync`, {
+      method: "POST",
+    });
+    const syncBody = await syncResponse.json();
+    expect(syncResponse.status).toBe(200);
+    expect(syncBody.data.added).toContain("lp_2");
+    expect(syncBody.data.importedProviders.lp_2.providerId).toBe("anthropic-cloud");
+    expect(syncBody.data.disabledProviders).toEqual(["demo-provider"]);
+
+    const stateResponse = await app.request(`http://openwork.local/workspaces/${workspaceId}/cloud/llm-providers/state`);
+    const stateBody = await stateResponse.json();
+    expect(stateResponse.status).toBe(200);
+    expect(stateBody.data.importedProviders.lp_1.providerId).toBe("openai-cloud");
+    expect(stateBody.data.importedProviders.lp_2.providerId).toBe("anthropic-cloud");
+
+    const removeResponse = await app.request(`http://openwork.local/workspaces/${workspaceId}/cloud/llm-providers/lp_1`, {
+      method: "DELETE",
+    });
+    const removeBody = await removeResponse.json();
+    expect(removeResponse.status).toBe(200);
+    expect(removeBody.data.importedProviders.lp_1).toBeUndefined();
+    expect((removeBody.data.snapshot.effective.opencode.provider as any)["openai-cloud"]).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

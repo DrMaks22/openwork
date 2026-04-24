@@ -43,6 +43,18 @@ function normalizeBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function sanitizeProxyResponse(response: Response) {
+  const headers = new Headers(response.headers);
+  headers.delete("content-encoding");
+  headers.delete("transfer-encoding");
+  headers.delete("content-length");
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
 function unwrapEnvelope<T>(payload: unknown): T {
   if (payload && typeof payload === "object" && "ok" in (payload as Record<string, unknown>)) {
     const record = payload as Record<string, unknown>;
@@ -154,5 +166,5 @@ export async function requestRemoteOpenworkRaw(input: {
     throw new RouteError(502, "bad_gateway", text.trim() || `Remote OpenWork request failed with status ${response.status}.`);
   }
 
-  return response;
+  return sanitizeProxyResponse(response);
 }
