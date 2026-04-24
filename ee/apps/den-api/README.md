@@ -20,6 +20,7 @@ pnpm --filter @openwork-ee/den-api dev:local
 - desktop handoff routes under `/v1/auth/*`
 - current user routes under `/v1/me*`
 - organization routes under `/v1/orgs*`
+- active-organization SCIM management routes under `/v1/scim*`
 - admin routes under `/v1/admin*`
 - worker lifecycle and billing routes under `/v1/workers*`
 

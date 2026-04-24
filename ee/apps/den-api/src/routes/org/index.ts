@@ -8,6 +8,7 @@ import { registerOrgLlmProviderRoutes } from "./llm-providers.js"
 import { registerOrgMemberRoutes } from "./members.js"
 import { registerPluginArchRoutes } from "./plugin-system/routes.js"
 import { registerOrgRoleRoutes } from "./roles.js"
+import { registerOrgScimRoutes } from "./scim.js"
 import { registerOrgSkillRoutes } from "./skills.js"
 import { registerOrgTeamRoutes } from "./teams.js"
 import { registerOrgTemplateRoutes } from "./templates.js"
@@ -41,6 +42,7 @@ function extractLegacyOrgProxyTarget(pathname: string) {
 export function registerOrgRoutes<T extends { Variables: OrgRouteVariables }>(app: Hono<T>) {
   registerOrgCoreRoutes(app)
   registerOrgApiKeyRoutes(app)
+  registerOrgScimRoutes(app)
   registerOrgInvitationRoutes(app)
   registerOrgLlmProviderRoutes(app)
   registerOrgMemberRoutes(app)

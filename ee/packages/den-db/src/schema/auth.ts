@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm"
 import { bigint, boolean, index, int, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core"
-import { denTypeIdColumn } from "../columns"
+import { denTypeIdColumn, encryptedTextColumn } from "../columns"
 
 export const AuthUserTable = mysqlTable(
   "user",
@@ -109,8 +109,27 @@ export const AuthApiKeyTable = mysqlTable(
   ],
 )
 
+export const ScimProviderTable = mysqlTable(
+  "scim_provider",
+  {
+    id: denTypeIdColumn("scimProvider", "id").notNull().primaryKey(),
+    providerId: varchar("provider_id", { length: 255 }).notNull(),
+    scimToken: encryptedTextColumn("scim_token").notNull(),
+    organizationId: denTypeIdColumn("organization", "organization_id").notNull(),
+    createdAt: timestamp("created_at", { fsp: 3 }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)`),
+  },
+  (table) => [
+    uniqueIndex("scim_provider_provider_id").on(table.providerId),
+    uniqueIndex("scim_provider_organization_id").on(table.organizationId),
+  ],
+)
+
 export const user = AuthUserTable
 export const session = AuthSessionTable
 export const account = AuthAccountTable
 export const verification = AuthVerificationTable
 export const apikey = AuthApiKeyTable
+export const scimProvider = ScimProviderTable

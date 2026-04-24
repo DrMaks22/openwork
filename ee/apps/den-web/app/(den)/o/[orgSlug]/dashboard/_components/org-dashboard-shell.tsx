@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Puzzle,
   Share2,
+  Shield,
   SlidersHorizontal,
   Store,
   Users,
@@ -34,6 +35,7 @@ import {
   getOrgSettingsRoute,
   getMarketplacesRoute,
   getPluginsRoute,
+  getScimRoute,
   getSharedSetupsRoute,
   getSkillHubsRoute,
 } from "../../../../_lib/den-org";
@@ -108,6 +110,9 @@ function getDashboardPageTitle(pathname: string, orgSlug: string | null) {
   }
   if (pathname.startsWith(getApiKeysRoute(orgSlug))) {
     return "API Keys";
+  }
+  if (pathname.startsWith(getScimRoute(orgSlug))) {
+    return "SCIM";
   }
   if (pathname.startsWith(getBackgroundAgentsRoute(orgSlug))) {
     return "Shared Workspaces";
@@ -216,6 +221,13 @@ export function OrgDashboardShell({ children }: { children: React.ReactNode }) {
           href: activeOrg ? getApiKeysRoute(activeOrg.slug) : "#",
           label: "API Keys",
           icon: KeyRound,
+        }]
+      : []),
+    ...(access.canManageScim
+      ? [{
+          href: activeOrg ? getScimRoute(activeOrg.slug) : "#",
+          label: "SCIM",
+          icon: Shield,
         }]
       : []),
     {

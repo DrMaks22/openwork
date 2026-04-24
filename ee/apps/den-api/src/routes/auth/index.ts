@@ -4,10 +4,12 @@ import { auth } from "../../auth.js"
 import { emptyResponse } from "../../openapi.js"
 import type { AuthContextVariables } from "../../session.js"
 import { registerDesktopAuthRoutes } from "./desktop-handoff.js"
+import { registerScimAuthRoutes } from "./scim.js"
 
 export function registerAuthRoutes<T extends { Variables: AuthContextVariables }>(app: Hono<T>) {
+  registerScimAuthRoutes(app)
   app.on(
-    ["GET", "POST"],
+    ["GET", "POST", "PUT", "PATCH", "DELETE"],
     "/api/auth/*",
     describeRoute({
       hide: true,

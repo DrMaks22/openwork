@@ -105,6 +105,14 @@ export type DenOrgApiKey = {
   };
 };
 
+export type DenOrgScimConnection = {
+  id: string;
+  providerId: string;
+  organizationId: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
 export type DenOrgContext = {
   organization: {
     id: string;
@@ -246,6 +254,7 @@ export function getOrgAccessFlags(roleValue: string, isOwner: boolean) {
     canManageRoles: isOwner,
     canManageTeams: isAdmin,
     canManageApiKeys: isAdmin,
+    canManageScim: isAdmin,
   };
 }
 
@@ -311,6 +320,10 @@ export function getOrgSettingsRoute(orgSlug?: string | null): string {
 
 export function getApiKeysRoute(orgSlug?: string | null): string {
   return `${getOrgDashboardRoute(orgSlug)}/api-keys`;
+}
+
+export function getScimRoute(orgSlug?: string | null): string {
+  return `${getOrgDashboardRoute(orgSlug)}/scim`;
 }
 
 export function getSkillHubsRoute(orgSlug?: string | null): string {
@@ -711,4 +724,41 @@ export function parseOrgApiKeysPayload(payload: unknown): DenOrgApiKey[] {
       } satisfies DenOrgApiKey;
     })
     .filter((entry): entry is DenOrgApiKey => entry !== null);
+}
+
+export function parseOrgScimPayload(payload: unknown): {
+  baseUrl: string | null;
+  connection: DenOrgScimConnection | null;
+  scimToken: string | null;
+} {
+  if (!isRecord(payload)) {
+    return { baseUrl: null, connection: null, scimToken: null };
+  }
+
+  const rawConnection = isRecord(payload.connection) ? payload.connection : null;
+  const connection = rawConnection
+    ? (() => {
+        const id = asString(rawConnection.id);
+        const providerId = asString(rawConnection.providerId);
+        const organizationId = asString(rawConnection.organizationId);
+
+        if (!id || !providerId || !organizationId) {
+          return null;
+        }
+
+        return {
+          id,
+          providerId,
+          organizationId,
+          createdAt: asIsoString(rawConnection.createdAt),
+          updatedAt: asIsoString(rawConnection.updatedAt),
+        } satisfies DenOrgScimConnection;
+      })()
+    : null;
+
+  return {
+    baseUrl: asString(payload.baseUrl),
+    connection,
+    scimToken: asString(payload.scimToken),
+  };
 }

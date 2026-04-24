@@ -19,6 +19,7 @@ import { seedDefaultOrganizationRoles } from "./orgs.js";
 import { createDenTypeId, normalizeDenTypeId } from "@openwork-ee/utils/typeid";
 import * as schema from "@openwork-ee/den-db/schema";
 import { apiKey } from "@better-auth/api-key";
+import { scim } from "@better-auth/scim";
 import { APIError } from "better-call";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -127,6 +128,8 @@ export const auth = betterAuth({
             return createDenTypeId("teamMember");
           case "organizationRole":
             return createDenTypeId("organizationRole");
+          case "scimProvider":
+            return createDenTypeId("scimProvider");
           default:
             return false;
         }
@@ -240,6 +243,21 @@ export const auth = betterAuth({
             });
           }
         },
+      },
+    }),
+    scim({
+      beforeSCIMTokenGenerated: async ({ member }) => {
+        if (!member?.organizationId) {
+          throw new APIError("FORBIDDEN", {
+            message: "SCIM connections must belong to an organization.",
+          });
+        }
+
+        if (!hasRole(member.role, "owner") && !hasRole(member.role, "admin")) {
+          throw new APIError("FORBIDDEN", {
+            message: "Only workspace owners and admins can manage SCIM.",
+          });
+        }
       },
     }),
     apiKey({
