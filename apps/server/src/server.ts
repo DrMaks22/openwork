@@ -20,7 +20,7 @@ import {
   startScheduler,
   triggerAutomation,
   updateAutomation,
-} from "./inngest.js";
+} from "./automations.js";
 import { ApiError, formatError } from "./errors.js";
 import { readJsoncFile, updateJsoncPath, updateJsoncTopLevel, writeJsoncFile } from "./jsonc.js";
 import { recordAudit, readAuditEntries, readLastAudit } from "./audit.js";
