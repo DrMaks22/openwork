@@ -317,10 +317,9 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
         <div className="flex items-center gap-3">
           <Workflow size={20} className="text-dls-secondary" />
           <h3 className="text-[15px] font-medium tracking-[-0.2px] text-dls-text">Workflows</h3>
-          <span className={tagClass}>Inngest</span>
         </div>
         <div className="rounded-[20px] border border-dashed border-dls-border bg-dls-surface px-5 py-8 text-center text-[14px] text-dls-secondary">
-          Connect to an OpenWork server to use Inngest-powered workflows.
+          Connect to an OpenWork server to use workflows.
         </div>
       </div>
     );
@@ -334,7 +333,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
           <Workflow size={20} className="text-dls-secondary" />
           <h3 className="text-[15px] font-medium tracking-[-0.2px] text-dls-text">Workflows</h3>
           <span className={`${tagClass} border-violet-7/30 bg-violet-3/40 text-violet-11`}>
-            Inngest
+            Auto
           </span>
         </div>
         <button type="button" className={pillPrimaryClass} onClick={() => openCreate()}>
@@ -494,7 +493,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
                 <p className="mt-1 text-xs text-dls-secondary">
                   {editingId
                     ? "Update the workflow name, prompt, or schedule."
-                    : "Create an Inngest-powered workflow that runs a prompt in OpenCode."}
+                    : "Create a workflow that runs a prompt in OpenCode."}
                 </p>
               </div>
               <button
@@ -564,7 +563,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
             <div className="flex items-center justify-between border-t border-dls-border px-5 py-4">
               <div className="flex items-center gap-2 text-[12px] text-dls-secondary">
                 <Zap size={14} />
-                Powered by Inngest
+                OpenWork Workflows
               </div>
               <div className="flex gap-2">
                 <button
