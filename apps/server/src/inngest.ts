@@ -1,9 +1,8 @@
 /**
  * Inngest-powered automations for OpenWork server (v1).
  *
- * Provides an in-memory automation store and functions to create, trigger, and
- * manage automation workflows. Triggered automations create an OpenCode session
- * and send the configured prompt.
+ * Provides an in-memory automation store, CRUD, trigger, update, and a
+ * recurring scheduler that fires automations on their configured interval.
  */
 
 import { Inngest } from "inngest";
@@ -19,7 +18,8 @@ export type Automation = {
   name: string;
   description: string;
   prompt: string;
-  schedule: string; // "manual" or cron expression
+  /** "manual" | intervalSeconds (e.g. "60") | cron expression */
+  schedule: string;
   enabled: boolean;
   workspaceId: string;
   createdAt: string;
@@ -28,6 +28,7 @@ export type Automation = {
   lastRunStatus: "pending" | "running" | "success" | "failed" | null;
   lastRunError: string | null;
   lastSessionId: string | null;
+  runCount: number;
 };
 
 export type CreateAutomationInput = {
@@ -35,6 +36,14 @@ export type CreateAutomationInput = {
   description?: string;
   prompt: string;
   schedule?: string;
+};
+
+export type UpdateAutomationInput = {
+  name?: string;
+  description?: string;
+  prompt?: string;
+  schedule?: string;
+  enabled?: boolean;
 };
 
 // ── In-memory store ─────────────────────────────────────────────────────
@@ -82,9 +91,29 @@ export function createAutomation(workspaceId: string, input: CreateAutomationInp
     lastRunStatus: null,
     lastRunError: null,
     lastSessionId: null,
+    runCount: 0,
   };
 
   automations.set(auto.id, auto);
+  return { ...auto };
+}
+
+export function updateAutomation(id: string, input: UpdateAutomationInput): Automation {
+  const auto = automations.get(id);
+  if (!auto) {
+    throw Object.assign(new Error(`Automation not found: ${id}`), { status: 404 });
+  }
+
+  if (input.name !== undefined) auto.name = input.name.trim() || auto.name;
+  if (input.description !== undefined) auto.description = input.description.trim();
+  if (input.prompt !== undefined) {
+    const p = input.prompt.trim();
+    if (p) auto.prompt = p;
+  }
+  if (input.schedule !== undefined) auto.schedule = input.schedule.trim() || "manual";
+  if (input.enabled !== undefined) auto.enabled = input.enabled;
+  auto.updatedAt = new Date().toISOString();
+
   return { ...auto };
 }
 
@@ -104,12 +133,6 @@ type FetchOpencodeJsonFn = (
   init: { method: string; body?: unknown },
 ) => Promise<unknown>;
 
-/**
- * Trigger an automation by creating an OpenCode session and sending the prompt.
- *
- * Attempts to send the event through Inngest first. If the Inngest dev server
- * is unreachable, falls back to direct execution via the OpenCode API.
- */
 export async function triggerAutomation(
   id: string,
   fetchOpencode: FetchOpencodeJsonFn,
@@ -124,9 +147,6 @@ export async function triggerAutomation(
   auto.lastRunError = null;
   auto.updatedAt = auto.lastRunAt;
 
-  // Always use direct execution for now -- the Inngest durable path requires
-  // the Inngest dev server to call back into our /api/inngest endpoint which
-  // needs more wiring in the Electron flow. Direct execution works reliably.
   return triggerDirect(auto, fetchOpencode);
 }
 
@@ -135,7 +155,6 @@ async function triggerDirect(
   fetchOpencode: FetchOpencodeJsonFn,
 ): Promise<{ eventId: string; sessionId?: string }> {
   try {
-    // Step 1: Create a new session
     const sessionResult = await fetchOpencode("/session", {
       method: "POST",
       body: {},
@@ -146,15 +165,12 @@ async function triggerDirect(
       throw new Error("Session creation did not return an ID");
     }
 
-    // Step 2: Send the prompt (OpenCode expects `parts` format, returns 204)
     try {
       await fetchOpencode(`/session/${sessionId}/prompt_async`, {
         method: "POST",
         body: { parts: [{ type: "text", text: auto.prompt }] },
       });
     } catch (err: unknown) {
-      // prompt_async returns 204 No Content on success, which fetchOpencodeJson
-      // may interpret as an error because there's no JSON body. That's fine.
       const status = (err as any)?.status ?? (err as any)?.details?.status;
       if (status !== 204) {
         throw err;
@@ -164,6 +180,7 @@ async function triggerDirect(
     auto.lastRunStatus = "success";
     auto.lastSessionId = sessionId;
     auto.lastRunError = null;
+    auto.runCount += 1;
     auto.updatedAt = new Date().toISOString();
 
     return { eventId: "direct", sessionId };
@@ -173,6 +190,61 @@ async function triggerDirect(
     auto.updatedAt = new Date().toISOString();
     throw error;
   }
+}
+
+// ── Recurring scheduler ─────────────────────────────────────────────────
+
+let schedulerTimer: ReturnType<typeof setInterval> | null = null;
+let schedulerFetchOpencode: FetchOpencodeJsonFn | null = null;
+
+/**
+ * Parse the schedule field. Returns interval in seconds, or 0 for manual.
+ */
+function parseScheduleSeconds(schedule: string): number {
+  if (!schedule || schedule === "manual") return 0;
+  const num = Number(schedule);
+  if (Number.isFinite(num) && num > 0) return num;
+  return 0;
+}
+
+/**
+ * Start the recurring scheduler. Checks every 10 seconds for automations
+ * whose interval has elapsed and triggers them.
+ */
+export function startScheduler(fetchOpencode: FetchOpencodeJsonFn) {
+  schedulerFetchOpencode = fetchOpencode;
+  if (schedulerTimer) return;
+
+  schedulerTimer = setInterval(() => {
+    if (!schedulerFetchOpencode) return;
+    const now = Date.now();
+
+    for (const auto of automations.values()) {
+      if (!auto.enabled) continue;
+      if (auto.lastRunStatus === "running") continue;
+
+      const intervalSec = parseScheduleSeconds(auto.schedule);
+      if (intervalSec <= 0) continue;
+
+      const lastRun = auto.lastRunAt ? new Date(auto.lastRunAt).getTime() : 0;
+      const elapsed = (now - lastRun) / 1000;
+
+      if (elapsed >= intervalSec) {
+        console.log(`[scheduler] Firing recurring automation: ${auto.name} (${auto.id})`);
+        triggerAutomation(auto.id, schedulerFetchOpencode).catch((err) => {
+          console.error(`[scheduler] Automation ${auto.id} failed:`, err instanceof Error ? err.message : err);
+        });
+      }
+    }
+  }, 10_000);
+}
+
+export function stopScheduler() {
+  if (schedulerTimer) {
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+  }
+  schedulerFetchOpencode = null;
 }
 
 // ── Inngest functions (for Inngest serve endpoint) ──────────────────────
@@ -217,7 +289,6 @@ export const runAutomationFn = inngest.createFunction(
           body: JSON.stringify({ parts: [{ type: "text", text: prompt }] }),
         },
       );
-      // 204 is success for prompt_async
       if (!res.ok && res.status !== 204) throw new Error(`Failed: ${res.status}`);
       return { sent: true };
     });

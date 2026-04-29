@@ -4,25 +4,18 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  Edit2,
   Loader2,
   Play,
   Plus,
+  Repeat,
   Trash2,
   Workflow,
   X,
   Zap,
 } from "lucide-react";
 
-/**
- * Inngest-powered Workflows panel.
- *
- * Displays automations stored on the OpenWork server (via the
- * /workspaces/:id/automations REST surface) and lets the user create, trigger,
- * and delete them. Triggered automations create an OpenCode session and send
- * the configured prompt.
- */
-
-/* ── Shared styles (mirrors automations-view design tokens) ──────────── */
+/* ── Shared styles ───────────────────────────────────────────────────── */
 
 const panelCardClass =
   "rounded-[20px] border border-dls-border bg-dls-surface p-5 transition-all hover:border-dls-border hover:shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]";
@@ -49,6 +42,7 @@ export type WorkflowAutomation = {
   lastRunAt: string | null;
   lastRunStatus: "pending" | "running" | "success" | "failed" | null;
   lastSessionId: string | null;
+  runCount?: number;
 };
 
 export type WorkflowsPanelProps = {
@@ -94,6 +88,28 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
+function scheduleLabel(schedule: string): string {
+  if (!schedule || schedule === "manual") return "Manual";
+  const num = Number(schedule);
+  if (Number.isFinite(num) && num > 0) {
+    if (num < 60) return `Every ${num}s`;
+    if (num < 3600) return `Every ${Math.round(num / 60)}m`;
+    return `Every ${Math.round(num / 3600)}h`;
+  }
+  return schedule;
+}
+
+const SCHEDULE_OPTIONS = [
+  { label: "Manual", value: "manual" },
+  { label: "Every 30 seconds (test)", value: "30" },
+  { label: "Every 1 minute", value: "60" },
+  { label: "Every 5 minutes", value: "300" },
+  { label: "Every 15 minutes", value: "900" },
+  { label: "Every hour", value: "3600" },
+  { label: "Every 6 hours", value: "21600" },
+  { label: "Every 24 hours", value: "86400" },
+];
+
 const WORKFLOW_PRESETS = [
   {
     name: "Open Chrome to Facebook",
@@ -128,14 +144,16 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
   const [automations, setAutomations] = useState<WorkflowAutomation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [triggerBusy, setTriggerBusy] = useState<string | null>(null);
 
-  // Create form state
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formPrompt, setFormPrompt] = useState("");
-  const [createBusy, setCreateBusy] = useState(false);
+  const [formSchedule, setFormSchedule] = useState("manual");
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const available = Boolean(serverBaseUrl && workspaceId);
 
@@ -152,10 +170,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
     setError(null);
     try {
       const res = await apiFetch<{ items: WorkflowAutomation[] }>(
-        serverBaseUrl,
-        basePath,
-        {},
-        authToken,
+        serverBaseUrl, basePath, {}, authToken,
       );
       setAutomations(res?.items ?? []);
     } catch (err) {
@@ -169,39 +184,90 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
     if (available) void refresh();
   }, [available, refresh]);
 
+  // Auto-refresh every 15s to pick up recurring run status changes
+  useEffect(() => {
+    if (!available) return;
+    const timer = setInterval(() => void refresh(), 15_000);
+    return () => clearInterval(timer);
+  }, [available, refresh]);
+
+  /* ── Modal helpers ──────────────────────────────────────────────────── */
+
+  const openCreate = (preset?: (typeof WORKFLOW_PRESETS)[number]) => {
+    setEditingId(null);
+    setFormName(preset?.name ?? "");
+    setFormDescription(preset?.description ?? "");
+    setFormPrompt(preset?.prompt ?? "");
+    setFormSchedule("manual");
+    setModalOpen(true);
+  };
+
+  const openEdit = (auto: WorkflowAutomation) => {
+    setEditingId(auto.id);
+    setFormName(auto.name);
+    setFormDescription(auto.description);
+    setFormPrompt(auto.prompt);
+    setFormSchedule(auto.schedule);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingId(null);
+    setSaveBusy(false);
+  };
+
   /* ── Actions ────────────────────────────────────────────────────────── */
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     if (!serverBaseUrl || !basePath || !formPrompt.trim()) return;
-    setCreateBusy(true);
+    setSaveBusy(true);
     try {
-      await apiFetch(
-        serverBaseUrl,
-        basePath,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: formName.trim() || "Untitled",
-            description: formDescription.trim(),
-            prompt: formPrompt.trim(),
-          }),
-        },
-        authToken,
-      );
-      setCreateOpen(false);
-      setFormName("");
-      setFormDescription("");
-      setFormPrompt("");
-      showToast?.({ title: "Workflow created", tone: "success" });
+      if (editingId) {
+        // Update existing
+        await apiFetch(
+          serverBaseUrl,
+          `${basePath}/${editingId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              name: formName.trim() || "Untitled",
+              description: formDescription.trim(),
+              prompt: formPrompt.trim(),
+              schedule: formSchedule,
+            }),
+          },
+          authToken,
+        );
+        showToast?.({ title: "Workflow updated", tone: "success" });
+      } else {
+        // Create new
+        await apiFetch(
+          serverBaseUrl,
+          basePath,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              name: formName.trim() || "Untitled",
+              description: formDescription.trim(),
+              prompt: formPrompt.trim(),
+              schedule: formSchedule,
+            }),
+          },
+          authToken,
+        );
+        showToast?.({ title: "Workflow created", tone: "success" });
+      }
+      closeModal();
       await refresh();
     } catch (err) {
       showToast?.({
-        title: "Failed to create workflow",
+        title: editingId ? "Failed to update" : "Failed to create",
         tone: "error",
         description: err instanceof Error ? err.message : null,
       });
     } finally {
-      setCreateBusy(false);
+      setSaveBusy(false);
     }
   };
 
@@ -243,13 +309,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
     }
   };
 
-  const handlePreset = (preset: (typeof WORKFLOW_PRESETS)[number]) => {
-    setFormName(preset.name);
-    setFormDescription(preset.description);
-    setFormPrompt(preset.prompt);
-    setCreateOpen(true);
-  };
-
   /* ── Render ─────────────────────────────────────────────────────────── */
 
   if (!available) {
@@ -278,21 +337,10 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
             Inngest
           </span>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={pillPrimaryClass}
-            onClick={() => {
-              setFormName("");
-              setFormDescription("");
-              setFormPrompt("");
-              setCreateOpen(true);
-            }}
-          >
-            <Plus size={14} />
-            New Workflow
-          </button>
-        </div>
+        <button type="button" className={pillPrimaryClass} onClick={() => openCreate()}>
+          <Plus size={14} />
+          New Workflow
+        </button>
       </div>
 
       {/* Error */}
@@ -303,7 +351,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
         </div>
       ) : null}
 
-      {/* Workflow presets */}
+      {/* Presets (shown when no automations) */}
       {automations.length === 0 && !loading ? (
         <div className="space-y-3">
           <p className="text-[13px] text-dls-secondary">
@@ -315,7 +363,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
                 key={preset.name}
                 type="button"
                 className={`${panelCardClass} cursor-pointer text-left`}
-                onClick={() => handlePreset(preset)}
+                onClick={() => openCreate(preset)}
               >
                 <div className="flex items-start gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dls-border bg-dls-hover">
@@ -383,17 +431,30 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
                       {auto.prompt}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-dls-secondary">
-                      <span className={tagClass}>
-                        <Clock size={10} className="mr-1" />
-                        {auto.schedule === "manual" ? "Manual" : auto.schedule}
+                      <span className={auto.schedule !== "manual"
+                        ? "inline-flex items-center rounded-md border border-violet-7/30 bg-violet-3/40 px-2 py-1 text-[11px] text-violet-11"
+                        : tagClass}>
+                        {auto.schedule !== "manual" ? <Repeat size={10} className="mr-1" /> : <Clock size={10} className="mr-1" />}
+                        {scheduleLabel(auto.schedule)}
                       </span>
                       {auto.lastRunAt ? (
                         <span className={tagClass}>Last run: {relativeTime(auto.lastRunAt)}</span>
+                      ) : null}
+                      {(auto.runCount ?? 0) > 0 ? (
+                        <span className={tagClass}>Runs: {auto.runCount}</span>
                       ) : null}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 border-t border-dls-border pt-4">
+                  <button
+                    type="button"
+                    className={pillGhostClass}
+                    onClick={() => openEdit(auto)}
+                  >
+                    <Edit2 size={14} />
+                    Edit
+                  </button>
                   <button
                     type="button"
                     className={pillSecondaryClass}
@@ -413,7 +474,6 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
                     onClick={() => void handleDelete(auto.id)}
                   >
                     <Trash2 size={14} />
-                    Delete
                   </button>
                 </div>
               </div>
@@ -422,20 +482,24 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
         </div>
       ) : null}
 
-      {/* Create modal */}
-      {createOpen ? (
+      {/* Create / Edit modal */}
+      {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-dls-border bg-dls-surface shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-dls-border px-5 py-4">
               <div>
-                <div className="text-sm font-semibold text-dls-text">New Workflow</div>
+                <div className="text-sm font-semibold text-dls-text">
+                  {editingId ? "Edit Workflow" : "New Workflow"}
+                </div>
                 <p className="mt-1 text-xs text-dls-secondary">
-                  Create an Inngest-powered workflow that runs a prompt in OpenCode.
+                  {editingId
+                    ? "Update the workflow name, prompt, or schedule."
+                    : "Create an Inngest-powered workflow that runs a prompt in OpenCode."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setCreateOpen(false)}
+                onClick={closeModal}
                 className="rounded-full p-1 text-dls-secondary transition-colors hover:bg-dls-hover hover:text-dls-text"
               >
                 <X size={18} />
@@ -475,6 +539,26 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
                   className="w-full resize-none rounded-xl border border-dls-border bg-dls-surface px-4 py-3 text-[14px] text-dls-text placeholder:text-dls-secondary/50 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--dls-accent-rgb),0.12)]"
                 />
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-dls-text">Schedule</label>
+                <select
+                  value={formSchedule}
+                  onChange={(e) => setFormSchedule(e.currentTarget.value)}
+                  className="w-full rounded-xl border border-dls-border bg-dls-surface px-4 py-3 text-[14px] text-dls-text focus:outline-none focus:ring-2 focus:ring-[rgba(var(--dls-accent-rgb),0.12)]"
+                >
+                  {SCHEDULE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {formSchedule !== "manual" ? (
+                  <p className="text-[12px] text-dls-secondary">
+                    The server will automatically trigger this workflow on the selected interval.
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex items-center justify-between border-t border-dls-border px-5 py-4">
@@ -486,23 +570,25 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
                 <button
                   type="button"
                   className={pillGhostClass}
-                  onClick={() => setCreateOpen(false)}
-                  disabled={createBusy}
+                  onClick={closeModal}
+                  disabled={saveBusy}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className={pillPrimaryClass}
-                  onClick={() => void handleCreate()}
-                  disabled={createBusy || !formPrompt.trim()}
+                  onClick={() => void handleSave()}
+                  disabled={saveBusy || !formPrompt.trim()}
                 >
-                  {createBusy ? (
+                  {saveBusy ? (
                     <Loader2 size={14} className="animate-spin" />
+                  ) : editingId ? (
+                    <Edit2 size={14} />
                   ) : (
                     <Plus size={14} />
                   )}
-                  Create & Save
+                  {editingId ? "Save Changes" : "Create & Save"}
                 </button>
               </div>
             </div>

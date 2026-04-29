@@ -17,7 +17,9 @@ import {
   deleteAutomation,
   getAutomation,
   listAutomations,
+  startScheduler,
   triggerAutomation,
+  updateAutomation,
 } from "./inngest.js";
 import { ApiError, formatError } from "./errors.js";
 import { readJsoncFile, updateJsoncPath, updateJsoncTopLevel, writeJsoncFile } from "./jsonc.js";
@@ -3701,6 +3703,28 @@ function createRoutes(
     const result = await triggerAutomation(ctx.params.autoId ?? "", fetchOpencode);
     return jsonResponse(result);
   });
+
+  addRoute(routes, "PATCH", "/workspace/:id/automations/:autoId", "client", async (ctx) => {
+    ensureWritable(config);
+    const body = await readJsonBody(ctx.request);
+    const automation = updateAutomation(ctx.params.autoId ?? "", {
+      name: body.name as string | undefined,
+      description: body.description as string | undefined,
+      prompt: body.prompt as string | undefined,
+      schedule: body.schedule as string | undefined,
+      enabled: body.enabled as boolean | undefined,
+    });
+    return jsonResponse(automation);
+  });
+
+  // Start the recurring scheduler for the first workspace
+  if (config.workspaces.length > 0) {
+    const firstWorkspace = config.workspaces[0];
+    const schedulerFetchOpencode = async (path: string, init: { method: string; body?: unknown }) => {
+      return fetchOpencodeJson(config, firstWorkspace, path, init);
+    };
+    startScheduler(schedulerFetchOpencode);
+  }
 
   addRoute(routes, "GET", "/workspace/:id/export", "client", async (ctx) => {
     const workspace = await resolveWorkspace(config, ctx.params.id);
