@@ -12,6 +12,13 @@ import { deleteSkill, listSkills, upsertSkill } from "./skills.js";
 import { installHubSkill, listHubSkills } from "./skill-hub.js";
 import { deleteCommand, listCommands, repairCommands, upsertCommand } from "./commands.js";
 import { deleteScheduledJob, listScheduledJobs, resolveScheduledJob } from "./scheduler.js";
+import {
+  createAutomation,
+  deleteAutomation,
+  getAutomation,
+  listAutomations,
+  triggerAutomation,
+} from "./inngest.js";
 import { ApiError, formatError } from "./errors.js";
 import { readJsoncFile, updateJsoncPath, updateJsoncTopLevel, writeJsoncFile } from "./jsonc.js";
 import { recordAudit, readAuditEntries, readLastAudit } from "./audit.js";
@@ -3639,6 +3646,60 @@ function createRoutes(
       timestamp: Date.now(),
     });
     return jsonResponse({ job });
+  });
+
+  // ── Inngest automations ──────────────────────────────────────────────
+
+  addRoute(routes, "GET", "/workspace/:id/automations", "client", async (ctx) => {
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const items = listAutomations(workspace.id);
+    return jsonResponse({ items });
+  });
+
+  addRoute(routes, "POST", "/workspace/:id/automations", "client", async (ctx) => {
+    ensureWritable(config);
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const body = await readJsonBody(ctx.request);
+    const automation = createAutomation(workspace.id, {
+      name: body.name as string | undefined,
+      description: body.description as string | undefined,
+      prompt: body.prompt as string,
+      schedule: body.schedule as string | undefined,
+    });
+    return jsonResponse(automation, 201);
+  });
+
+  addRoute(routes, "GET", "/workspace/:id/automations/:autoId", "client", async (ctx) => {
+    const automation = getAutomation(ctx.params.autoId ?? "");
+    if (!automation) {
+      throw new ApiError(404, "not_found", "Automation not found");
+    }
+    return jsonResponse(automation);
+  });
+
+  addRoute(routes, "DELETE", "/workspace/:id/automations/:autoId", "client", async (ctx) => {
+    ensureWritable(config);
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const automation = deleteAutomation(ctx.params.autoId ?? "");
+    await recordAudit(workspace.path, {
+      id: shortId(),
+      workspaceId: workspace.id,
+      actor: ctx.actor ?? { type: "remote" },
+      action: "automation.delete",
+      target: automation.id,
+      summary: `Deleted automation ${automation.name}`,
+      timestamp: Date.now(),
+    });
+    return jsonResponse({ deleted: true, automation });
+  });
+
+  addRoute(routes, "POST", "/workspace/:id/automations/:autoId/trigger", "client", async (ctx) => {
+    const workspace = await resolveWorkspace(config, ctx.params.id);
+    const fetchOpencode = async (path: string, init: { method: string; body?: unknown }) => {
+      return fetchOpencodeJson(config, workspace, path, init);
+    };
+    const result = await triggerAutomation(ctx.params.autoId ?? "", fetchOpencode);
+    return jsonResponse(result);
   });
 
   addRoute(routes, "GET", "/workspace/:id/export", "client", async (ctx) => {

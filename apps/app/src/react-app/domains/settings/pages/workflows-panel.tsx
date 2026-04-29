@@ -140,7 +140,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
   const available = Boolean(serverBaseUrl && workspaceId);
 
   const basePath = useMemo(
-    () => (serverBaseUrl && workspaceId ? `/workspaces/${workspaceId}/automations` : null),
+    () => (serverBaseUrl && workspaceId ? `/workspace/${workspaceId}/automations` : null),
     [serverBaseUrl, workspaceId],
   );
 
@@ -151,13 +151,13 @@ export function WorkflowsPanel(props: WorkflowsPanelProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch<{ data: { items: WorkflowAutomation[] } }>(
+      const res = await apiFetch<{ items: WorkflowAutomation[] }>(
         serverBaseUrl,
         basePath,
         {},
         authToken,
       );
-      setAutomations(res.data?.items ?? []);
+      setAutomations(res?.items ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workflows");
     } finally {
