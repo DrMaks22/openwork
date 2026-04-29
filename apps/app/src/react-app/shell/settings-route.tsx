@@ -24,6 +24,7 @@ import { GeneralSettingsView } from "../domains/settings/pages/general-view";
 import { AdvancedView } from "../domains/settings/pages/advanced-view";
 import { AppearanceView } from "../domains/settings/pages/appearance-view";
 import { AutomationsView } from "../domains/settings/pages/automations-view";
+import { WorkflowsPanel } from "../domains/settings/pages/workflows-panel";
 import { DebugView } from "../domains/settings/pages/debug-view";
 import { DenView } from "../domains/settings/pages/den-view";
 import { ExtensionsView } from "../domains/settings/pages/extensions-view";
@@ -1021,22 +1022,35 @@ export function SettingsRoute() {
         );
       case "automations":
         return (
-          <AutomationsView
-            automations={automationsStore}
-            busy={busy}
-            selectedWorkspaceRoot={selectedWorkspaceRoot}
-            createSessionAndOpen={async () => undefined}
-            newTaskDisabled={!opencodeClient}
-            schedulerInstalled={false}
-            canEditPlugins={!isRemoteWorkspace}
-            addPlugin={async () => {
-              setRouteError("Scheduler plugin install is not wired into the React settings route yet.");
-            }}
-            reloadWorkspaceEngine={reloadCoordinator.reloadWorkspaceEngine}
-            reloadBusy={false}
-            canReloadWorkspace={reloadCoordinator.canReloadWorkspaceEngine}
-            openLink={(url) => platform.openLink(url)}
-          />
+          <>
+            <WorkflowsPanel
+              serverBaseUrl={baseUrl || null}
+              workspaceId={selectedWorkspace?.id ?? null}
+              authToken={token || null}
+              showToast={(input) => {
+                if (input.tone === "error") {
+                  setRouteError(input.title + (input.description ? `: ${input.description}` : ""));
+                }
+              }}
+            />
+            <div className="my-8 border-t border-dls-border" />
+            <AutomationsView
+              automations={automationsStore}
+              busy={busy}
+              selectedWorkspaceRoot={selectedWorkspaceRoot}
+              createSessionAndOpen={async () => undefined}
+              newTaskDisabled={!opencodeClient}
+              schedulerInstalled={false}
+              canEditPlugins={!isRemoteWorkspace}
+              addPlugin={async () => {
+                setRouteError("Scheduler plugin install is not wired into the React settings route yet.");
+              }}
+              reloadWorkspaceEngine={reloadCoordinator.reloadWorkspaceEngine}
+              reloadBusy={false}
+              canReloadWorkspace={reloadCoordinator.canReloadWorkspaceEngine}
+              openLink={(url) => platform.openLink(url)}
+            />
+          </>
         );
       case "skills":
         return (
