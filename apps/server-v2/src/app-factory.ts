@@ -37,6 +37,7 @@ export function createApp(options: CreateAppOptions = {}) {
   const inngestService: InngestService = createInngestService({
     serverBaseUrl,
     authToken: options.inngest?.authToken ?? process.env.OPENWORK_TOKEN,
+    sessions: dependencies.services.sessions,
   });
 
   registerRoutes(app, dependencies, { inngest: inngestService });

@@ -1,5 +1,6 @@
 import { inngest } from "./client.js";
 import { RouteError } from "../http.js";
+import type { WorkspaceSessionService } from "../services/workspace-session-service.js";
 
 /**
  * In-memory automation store. In production this would live in SQLite alongside
@@ -34,6 +35,7 @@ export type CreateAutomationInput = {
 export type InngestServiceConfig = {
   serverBaseUrl: string;
   authToken?: string;
+  sessions: WorkspaceSessionService;
 };
 
 function generateId() {
@@ -47,7 +49,7 @@ export function createInngestService(config: InngestServiceConfig) {
 
   return {
     getConfig() {
-      return { ...config };
+      return { serverBaseUrl: config.serverBaseUrl, authToken: config.authToken };
     },
 
     listAutomations(workspaceId: string): Automation[] {
@@ -123,12 +125,8 @@ export function createInngestService(config: InngestServiceConfig) {
 
         return { eventId: (sendResult as any)?.ids?.[0] ?? "sent" };
       } catch (error) {
-        auto.lastRunStatus = "failed";
-        auto.updatedAt = new Date().toISOString();
-
         // If Inngest dev server is not reachable, fall back to direct execution
         console.warn("[inngest] Dev server unreachable, executing directly:", error instanceof Error ? error.message : error);
-
         return this.triggerDirect(id);
       }
     },
@@ -145,41 +143,17 @@ export function createInngestService(config: InngestServiceConfig) {
       auto.updatedAt = auto.lastRunAt;
 
       try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (config.authToken) {
-          headers["Authorization"] = `Bearer ${config.authToken}`;
-        }
-
-        // Create session
-        const createRes = await fetch(`${config.serverBaseUrl}/workspaces/${auto.workspaceId}/sessions`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({}),
-        });
-
-        if (!createRes.ok) {
-          throw new Error(`Failed to create session: ${createRes.status}`);
-        }
-
-        const sessionData = (await createRes.json()) as { data?: { id?: string } };
-        const sessionId = sessionData?.data?.id;
+        // Create session using the session service directly (no HTTP self-call)
+        const session = await config.sessions.createSession(auto.workspaceId, {});
+        const sessionId = (session as any)?.id;
         if (!sessionId) {
-          throw new Error("No session ID returned");
+          throw new Error("No session ID returned from createSession");
         }
 
-        // Send prompt
-        const promptRes = await fetch(
-          `${config.serverBaseUrl}/workspaces/${auto.workspaceId}/sessions/${sessionId}/prompt_async`,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ content: auto.prompt }),
-          },
-        );
-
-        if (!promptRes.ok) {
-          throw new Error(`Failed to send prompt: ${promptRes.status}`);
-        }
+        // Send prompt using the session service directly
+        await config.sessions.promptAsync(auto.workspaceId, sessionId, {
+          parts: [{ type: "text", text: auto.prompt }],
+        });
 
         auto.lastRunStatus = "success";
         auto.lastSessionId = sessionId;

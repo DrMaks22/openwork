@@ -1,5 +1,10 @@
 import { inngest } from "./client.js";
 
+/** Build the prompt_async body in the format OpenCode expects. */
+function buildPromptBody(prompt: string) {
+  return { parts: [{ type: "text", text: prompt }] };
+}
+
 /**
  * Inngest function: run an automation workflow.
  *
@@ -44,8 +49,8 @@ export const runAutomation = inngest.createFunction(
       throw new Error("Session creation did not return an ID");
     }
 
-    // Step 2: Send the prompt
-    const promptResult = await step.run("send-prompt", async () => {
+    // Step 2: Send the prompt (OpenCode expects `parts` format, returns 204)
+    await step.run("send-prompt", async () => {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (authToken) {
         headers["Authorization"] = `Bearer ${authToken}`;
@@ -55,21 +60,20 @@ export const runAutomation = inngest.createFunction(
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ content: prompt }),
+          body: JSON.stringify(buildPromptBody(prompt)),
         },
       );
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(`Failed to send prompt: ${res.status} ${text}`);
       }
-      return (await res.json()) as Record<string, unknown>;
+      return { sent: true };
     });
 
     return {
       sessionId,
       prompt,
       workspaceId,
-      promptResult,
       completedAt: new Date().toISOString(),
     };
   },
@@ -129,13 +133,13 @@ export const scheduledAutomation = inngest.createFunction(
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ content: prompt }),
+          body: JSON.stringify(buildPromptBody(prompt)),
         },
       );
       if (!res.ok) {
         throw new Error(`Failed to send prompt: ${res.status}`);
       }
-      return (await res.json()) as Record<string, unknown>;
+      return { sent: true };
     });
 
     return {
