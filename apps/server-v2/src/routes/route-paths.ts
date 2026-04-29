@@ -176,17 +176,6 @@ export const routePaths = {
       unrevert: (sessionId: string = ":sessionId", workspaceId: string = WORKSPACE_ID_PARAMETER) =>
         `${workspaceSessionPath(sessionId, workspaceId)}/unrevert`,
     },
-    automations: {
-      base: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/automations`,
-      byId: (automationId: string = ":automationId", workspaceId: string = WORKSPACE_ID_PARAMETER) =>
-        `${workspaceRoutePath(workspaceId)}/automations/${automationId}`,
-      trigger: (automationId: string = ":automationId", workspaceId: string = WORKSPACE_ID_PARAMETER) =>
-        `${workspaceRoutePath(workspaceId)}/automations/${automationId}/trigger`,
-    },
-    scheduler: {
-      base: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/scheduler/jobs`,
-      byName: (name: string = ":name", workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/scheduler/jobs/${name}`,
-    },
     skills: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/skills`,
     hubSkills: "/hub/skills",
     simpleContent: (workspaceId: string = WORKSPACE_ID_PARAMETER) => `${workspaceRoutePath(workspaceId)}/files/content`,
