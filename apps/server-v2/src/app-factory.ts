@@ -4,6 +4,7 @@ import { createAppDependencies } from "./context/app-dependencies.js";
 import type { AppBindings } from "./context/request-context.js";
 import { requestContextMiddleware } from "./context/request-context.js";
 import { buildErrorResponse } from "./http.js";
+import { createInngestService, type InngestService } from "./inngest/service.js";
 import { errorHandlingMiddleware } from "./middleware/error-handler.js";
 import { requestLoggerMiddleware } from "./middleware/request-logger.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
@@ -12,6 +13,11 @@ import { registerRoutes } from "./routes/index.js";
 
 export type CreateAppOptions = {
   dependencies?: AppDependencies;
+  inngest?: {
+    /** Override the base URL that Inngest functions use to call back into the server. */
+    serverBaseUrl?: string;
+    authToken?: string;
+  };
 };
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -24,7 +30,16 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use("*", requestLoggerMiddleware);
   app.use("*", errorHandlingMiddleware);
 
-  registerRoutes(app, dependencies);
+  // Create Inngest service for automation workflows
+  const serverBaseUrl = options.inngest?.serverBaseUrl
+    ?? process.env.OPENWORK_SERVER_BASE_URL
+    ?? "http://localhost:48101";
+  const inngestService: InngestService = createInngestService({
+    serverBaseUrl,
+    authToken: options.inngest?.authToken ?? process.env.OPENWORK_TOKEN,
+  });
+
+  registerRoutes(app, dependencies, { inngest: inngestService });
 
   app.notFound((c) => {
     const requestId = c.get("requestId");
