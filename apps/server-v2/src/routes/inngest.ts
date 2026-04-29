@@ -19,28 +19,15 @@ export function registerInngestRoutes(
   inngestService: InngestService,
 ) {
   // ── Inngest serve endpoint ────────────────────────────────────────────
+  // inngest/hono `serve()` returns an InngestCommHandler that acts as a
+  // Hono handler: call it with the context `c` for any method.
   const inngestHandler = serve({
     client: inngest,
     functions: inngestFunctions,
   });
 
-  // Hono route that delegates to Inngest's serve handler
-  app.all("/api/inngest", async (c) => {
-    const handler = inngestHandler as any;
-    // inngest/hono returns { GET, POST, PUT } handlers
-    const method = c.req.method.toUpperCase();
-
-    if (method === "GET" && handler.GET) {
-      return handler.GET(c);
-    }
-    if (method === "POST" && handler.POST) {
-      return handler.POST(c);
-    }
-    if (method === "PUT" && handler.PUT) {
-      return handler.PUT(c);
-    }
-
-    return c.json({ error: "Method not allowed" }, 405);
+  app.on(["GET", "POST", "PUT"], "/api/inngest", async (c) => {
+    return (inngestHandler as any)(c);
   });
 
   // ── Automation CRUD ───────────────────────────────────────────────────
